@@ -1,6 +1,12 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { priorities, type Priority, type PriorityIcon } from '@/db/schema';
+import {
+  priorities,
+  priorityFiles,
+  priorityMemory,
+  type Priority,
+  type PriorityIcon,
+} from '@/db/schema';
 import { newId } from '@/lib/id';
 
 export type PriorityStatus = 'active' | 'paused' | 'archived';
@@ -92,6 +98,7 @@ export type UpdatePriorityPatch = {
   minMinutesPerWeek?: number;
   maxMinutesPerWeek?: number;
   checkInCadence?: string[];
+  pinnedSummary?: string | null;
   status?: PriorityStatus;
 };
 
@@ -125,19 +132,41 @@ export async function updatePriority(
 }
 
 export async function softDeletePriority(userId: string, id: string): Promise<boolean> {
-  // TODO M8: cascade soft-delete tasks, events, priority_memory, priority_files
-  // per priorities-tdd.md:472-512 (selective: preserve past-completed tasks/events).
-  const result = await db
-    .update(priorities)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(
-      and(
-        eq(priorities.id, id),
-        eq(priorities.userId, userId),
-        isNull(priorities.deletedAt),
-      ),
-    )
-    .returning({ id: priorities.id });
+  // Selective-cascade soft-delete per priorities-tdd.md:472-512.
+  // M6: cascades to priority_memory + priority_files (both fully soft-deleted;
+  // blobs in Vercel storage are left orphaned for v1.1 cleanup).
+  // TODO M8: extend cascade to tasks + events (selective: preserve past-completed).
+  const now = new Date();
+  const result = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(priorities)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(priorities.id, id),
+          eq(priorities.userId, userId),
+          isNull(priorities.deletedAt),
+        ),
+      )
+      .returning({ id: priorities.id });
+
+    if (updated.length === 0) return updated;
+
+    await tx
+      .update(priorityMemory)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(eq(priorityMemory.priorityId, id), isNull(priorityMemory.deletedAt)),
+      );
+
+    await tx
+      .update(priorityFiles)
+      .set({ deletedAt: now })
+      .where(and(eq(priorityFiles.priorityId, id), isNull(priorityFiles.deletedAt)));
+
+    return updated;
+  });
+
   return result.length > 0;
 }
 

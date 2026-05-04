@@ -49,6 +49,7 @@ Files written so far:
 - `drizzle/migrations/0000_init_auth.sql` — M2 (users, sessions, magic_link_tokens)
 - `drizzle/migrations/0001_user_settings.sql` — M3 (user_settings)
 - `drizzle/migrations/0002_priorities.sql` — M4 (priorities)
+- `drizzle/migrations/0003_priority_memory_and_files.sql` — M6 (priority_memory, priority_files)
 
 ## Build-order deviations from TDD
 

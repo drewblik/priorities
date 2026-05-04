@@ -149,19 +149,34 @@ export function PriorityForm({ mode, initial, submitTarget }: Props) {
       </Field>
 
       {mode === 'edit' ? (
-        <Field label="Status">
-          <select
-            name="status"
-            defaultValue={initial?.status ?? 'active'}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+        <>
+          <Field
+            label="Pinned summary"
+            hint="Long-term snapshot of this Priority. The chatbots will read this first. Auto-updated by memory summarization in M19."
           >
-            {PRIORITY_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </Field>
+            <textarea
+              name="pinnedSummary"
+              rows={4}
+              maxLength={5000}
+              defaultValue={initial?.pinnedSummary ?? ''}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+            />
+          </Field>
+
+          <Field label="Status">
+            <select
+              name="status"
+              defaultValue={initial?.status ?? 'active'}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+            >
+              {PRIORITY_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </>
       ) : null}
 
       <div className="flex items-center gap-3 pt-2">

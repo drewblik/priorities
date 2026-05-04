@@ -75,10 +75,10 @@ export function SortablePriorityCard({ priority }: Props) {
           className="absolute right-0 top-full z-10 mt-1 w-56 rounded-md border border-border bg-background shadow-md"
         >
           <Link
-            href={`/priorities/${priority.id}/edit`}
+            href={`/priorities/${priority.id}`}
             className="block px-3 py-2 text-sm hover:bg-muted"
           >
-            Edit
+            Open
           </Link>
 
           {isActive ? (

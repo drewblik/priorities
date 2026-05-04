@@ -19,6 +19,7 @@
     "@dnd-kit/sortable": "latest",
     "@dnd-kit/utilities": "latest",
     "@neondatabase/serverless": "latest",
+    "@vercel/blob": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "date-fns": "latest",

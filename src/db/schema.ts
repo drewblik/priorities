@@ -118,3 +118,44 @@ export const priorities = pgTable(
 );
 
 export type Priority = typeof priorities.$inferSelect;
+
+// =============================================================================
+// M6: priority_memory + priority_files (Priority Detail page CRUD)
+// =============================================================================
+
+export const priorityMemory = pgTable(
+  'priority_memory',
+  {
+    id: text('id').primaryKey(),
+    priorityId: text('priority_id')
+      .notNull()
+      .references(() => priorities.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(), // markdown
+    tags: text('tags').array().notNull().default([]),
+    source: text('source').notNull().default('user'), // user|chatbot|onboarding|master_chat
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [index('idx_priority_memory_priority').on(table.priorityId, table.createdAt)],
+);
+
+export const priorityFiles = pgTable(
+  'priority_files',
+  {
+    id: text('id').primaryKey(),
+    priorityId: text('priority_id')
+      .notNull()
+      .references(() => priorities.id, { onDelete: 'cascade' }),
+    filename: text('filename').notNull(),
+    blobUrl: text('blob_url').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [index('idx_priority_files_priority').on(table.priorityId)],
+);
+
+export type PriorityMemory = typeof priorityMemory.$inferSelect;
+export type PriorityFile = typeof priorityFiles.$inferSelect;
