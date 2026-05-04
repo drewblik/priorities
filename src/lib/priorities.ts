@@ -136,38 +136,38 @@ export async function softDeletePriority(userId: string, id: string): Promise<bo
   // M6: cascades to priority_memory + priority_files (both fully soft-deleted;
   // blobs in Vercel storage are left orphaned for v1.1 cleanup).
   // TODO M8: extend cascade to tasks + events (selective: preserve past-completed).
+  //
+  // Sequential statements rather than db.transaction() — the Neon HTTP driver's
+  // transaction API can't branch on intermediate results (it batches all queries
+  // upfront). The cascade is idempotent: if step 1 succeeds and step 2 or 3 fails,
+  // the user can retry and the trailing updates will simply re-target zero rows.
   const now = new Date();
-  const result = await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(priorities)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(
-        and(
-          eq(priorities.id, id),
-          eq(priorities.userId, userId),
-          isNull(priorities.deletedAt),
-        ),
-      )
-      .returning({ id: priorities.id });
 
-    if (updated.length === 0) return updated;
+  const updated = await db
+    .update(priorities)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(priorities.id, id),
+        eq(priorities.userId, userId),
+        isNull(priorities.deletedAt),
+      ),
+    )
+    .returning({ id: priorities.id });
 
-    await tx
-      .update(priorityMemory)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(
-        and(eq(priorityMemory.priorityId, id), isNull(priorityMemory.deletedAt)),
-      );
+  if (updated.length === 0) return false;
 
-    await tx
-      .update(priorityFiles)
-      .set({ deletedAt: now })
-      .where(and(eq(priorityFiles.priorityId, id), isNull(priorityFiles.deletedAt)));
+  await db
+    .update(priorityMemory)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(and(eq(priorityMemory.priorityId, id), isNull(priorityMemory.deletedAt)));
 
-    return updated;
-  });
+  await db
+    .update(priorityFiles)
+    .set({ deletedAt: now })
+    .where(and(eq(priorityFiles.priorityId, id), isNull(priorityFiles.deletedAt)));
 
-  return result.length > 0;
+  return true;
 }
 
 export async function reorderPriorities(
