@@ -4,7 +4,7 @@
 
 ## Last Updated
 
-2026-05-03 (M2 in progress)
+2026-05-03 (M3 in progress)
 
 ## Phase Status
 
@@ -21,8 +21,8 @@
 | # | Milestone | Status | Notes |
 |---|-----------|--------|-------|
 | 1 | Project scaffold (Next.js 15 + Tailwind v4 + Drizzle + Lucia magic link) | ✅ | Verified 2026-05-03 — production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. Build pipeline working end-to-end: GitHub push → Vercel auto-deploy → preview URL. Lucia v3 dropped during M1 fix; magic link auth in M2 uses custom session management. |
-| 2 | Database setup + magic link auth flow (signin, auth callback, signout) | 🔨 | Code complete 2026-05-03. Schema: `users`, `sessions`, `magic_link_tokens` (see `src/db/schema.ts`). SQL migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt (no Lucia) in `src/auth/` — sessions DB id = `sha256(token).hex()` (Lucia post-sunset pattern; one intentional deviation from `<prefix>_<nanoid>` convention, justified by security). 30-day session TTL with sliding renewal. 15-min magic link TTL with single-use replay protection (atomic `used_at` flip). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Awaits owner setup (Neon DB + Resend API key + env vars + apply migration + push) before verification. |
-| 3 | User settings + Settings page skeleton | ⬜ | Tabs, profile tab, API key tab with AES-GCM encryption |
+| 2 | Database setup + magic link auth flow (signin, auth callback, signout) | ✅ | Verified 2026-05-03. End-to-end magic link flow works on production (Neon DB live, Resend sending, session cookie persists, sign in + sign out both functional). Schema: `users`, `sessions`, `magic_link_tokens`. Custom session mgmt in `src/auth/`. |
+| 3 | User settings + Settings page skeleton | 🔨 | **Partial**: `user_settings` Drizzle table added to `src/db/schema.ts` and matching SQL migration `drizzle/migrations/0001_user_settings.sql` written. **Still TODO**: (a) apply migration in Neon SQL editor, (b) add `API_KEY_ENCRYPTION_KEY` env var in Vercel (`openssl rand -base64 32`), (c) write `src/lib/encryption.ts` (AES-GCM wrapper), (d) write `src/lib/settings.ts` (get/upsert with encryption), (e) build `/settings/profile` and `/settings/api-key` pages with tabs nav, (f) build `/api/settings` GET + PATCH route. |
 | 4 | Priorities table + Council Home (Priorities List) read-only | ⬜ | Static list display first |
 | 5 | Manual Priority CRUD + drag-to-reorder (@dnd-kit) + pause/archive | ⬜ | Optimistic UI on reorder; selective-cascade soft-delete |
 | 6 | Priority Detail page with full edit | ⬜ | All structured core fields, memory entries CRUD, file uploads |
@@ -147,7 +147,9 @@ Career, Money, Personal Growth candidates:
 
 Most recent at the top. Each entry: date + summary. Keep concise.
 
-- **2026-05-03 (M2 code complete)**: Magic link auth + first DB tables. Schema: `users` / `sessions` / `magic_link_tokens` (`src/db/schema.ts`). Hand-written initial migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt in `src/auth/` (sessions, magic-link, cookie, public API). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Home `/` now redirects to `/signin` if not authed. Removed `oslo` from deps (using Node's built-in `crypto`). Awaiting owner setup of Neon + Resend + env vars.
+- **2026-05-03 (M3 schema added)**: `user_settings` table added to Drizzle schema and matching SQL migration `0001_user_settings.sql` written. Owner switching from desktop to phone session here — next session resumes M3 from "schema ready, encryption + UI + API still TODO."
+- **2026-05-03 (M2 verified)**: End-to-end magic-link sign in works on production. M2 → ✅. CLAUDE.md added at repo root for future-session context.
+- **2026-05-03 (M2 code complete)**: Magic link auth + first DB tables. Schema: `users` / `sessions` / `magic_link_tokens` (`src/db/schema.ts`). Hand-written initial migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt in `src/auth/` (sessions, magic-link, cookie, public API). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Home `/` now redirects to `/signin` if not authed. Removed `oslo` from deps (using Node's built-in `crypto`).
 - **2026-05-03 (M1 verified)**: Production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. M1 complete.
 - **2026-05-03 (M1 fix)**: Removed `lucia` and `@lucia-auth/adapter-postgresql` from package.json — the adapter's peer-dep range broke the first Vercel build and Lucia v3 was sunset by its maintainer in late 2024. M2 rolls session management directly per Lucia's official sunset migration guidance.
 - **2026-05-03 (M1 scaffold)**: Project scaffolded as Next.js 15 + Tailwind v4 + Drizzle + Lucia + shadcn-style utilities. Created `package.json` (deps from TDD §Stack package list), `tsconfig.json`, `next.config.mjs`, `postcss.config.mjs`, `drizzle.config.ts`, `.env.example`, `.gitignore`. Initial folder layout: `src/app/`, `src/db/`, `src/lib/`, plus stub `src/db/schema.ts` (populated milestone-by-milestone) and `src/db/client.ts` (Neon serverless). Created `src/lib/utils.ts` (cn helper) and `src/lib/id.ts` (`<prefix>_<nanoid(16)>` helper). Initial routes: `/` placeholder home + `/api/healthcheck`. README rewritten as project README pointing at design docs and PROJECT-STATUS. Git repo initialized. **Deviation tracking**: cost circuit breaker pulled forward to M12 (TDD §Security requires it before any LLM call); data export added to M19 (acceptance criterion #13).
