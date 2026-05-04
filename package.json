@@ -25,8 +25,6 @@
     "date-fns-tz": "latest",
     "drizzle-orm": "latest",
     "ical.js": "latest",
-    "lucia": "^3",
-    "@lucia-auth/adapter-postgresql": "^3",
     "lucide-react": "latest",
     "nanoid": "latest",
     "next": "^15",

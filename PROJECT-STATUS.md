@@ -50,7 +50,7 @@
 
 ### Important (next iteration)
 
-_None yet — populate as issues surface during build._
+- **Lucia v3 dropped from dependencies (2026-05-03).** The maintainer sunset Lucia in late 2024; `@lucia-auth/adapter-postgresql@3.x` has a peer dep on `@neondatabase/serverless@"0.7 - 0.9"` which conflicts with the latest Neon driver and broke the M1 Vercel build. Per the maintainer's official guidance, M2 will implement magic-link + session management directly using `oslo` (crypto primitives — already in deps) + Drizzle (sessions table). No functional change to the plan. TDD §Stack still says "Lucia magic link" — interpret that as "magic link auth, conventionally Lucia-style sessions in DB," not literal Lucia usage.
 
 ### Nice-to-have (backlog)
 
@@ -141,6 +141,7 @@ Career, Money, Personal Growth candidates:
 
 Most recent at the top. Each entry: date + summary. Keep concise.
 
+- **2026-05-03 (M1 fix)**: Removed `lucia` and `@lucia-auth/adapter-postgresql` from package.json — the adapter's peer-dep range broke the first Vercel build and Lucia v3 was sunset by its maintainer in late 2024. M2 will roll session management directly per Lucia's official sunset migration guidance (oslo + Drizzle).
 - **2026-05-03 (M1 scaffold)**: Project scaffolded as Next.js 15 + Tailwind v4 + Drizzle + Lucia + shadcn-style utilities. Created `package.json` (deps from TDD §Stack package list), `tsconfig.json`, `next.config.mjs`, `postcss.config.mjs`, `drizzle.config.ts`, `.env.example`, `.gitignore`. Initial folder layout: `src/app/`, `src/db/`, `src/lib/`, plus stub `src/db/schema.ts` (populated milestone-by-milestone) and `src/db/client.ts` (Neon serverless). Created `src/lib/utils.ts` (cn helper) and `src/lib/id.ts` (`<prefix>_<nanoid(16)>` helper). Initial routes: `/` placeholder home + `/api/healthcheck`. README rewritten as project README pointing at design docs and PROJECT-STATUS. Git repo initialized. **Deviation tracking**: cost circuit breaker pulled forward to M12 (TDD §Security requires it before any LLM call); data export added to M19 (acceptance criterion #13).
 
 - **2026-05-03 (final audit)**: Comprehensive cross-doc audit pass. Findings resolved:
