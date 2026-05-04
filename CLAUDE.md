@@ -19,6 +19,7 @@ Mid-build. See `PROJECT-STATUS.md § v1 Build Progress` for milestone-by-milesto
 ## Build approach (per TDD § Build Approach)
 
 - Owner does **not** have a desktop dev environment; everything happens via Claude Code (web at claude.ai/code or the desktop app) connected to GitHub. Vercel auto-deploys every push. Test on phone via preview URL.
+- **Phone-friendly format for everything outside Claude Code.** Any task the owner has to perform in another tool (Neon SQL editor, Vercel dashboard, Resend, GitHub UI, third-party services) must be written for a phone: tap-by-tap navigation with the actual menu/button names, every block of SQL or config in a single fenced code block (so it's tap-and-hold to copy), a quick verification step at the end, and a "if something goes wrong" troubleshooting section. If a step needs a value the owner can't easily generate on a phone (random keys, hashes, etc.), generate it in the Claude Code session and give them the literal value to paste.
 - **Always start with plan mode** on first handoff and on any complex change. Owner reviews plan and approves before code lands.
 - Direct-to-`main` for solo iteration is fine. Use feature branches when a change feels risky or affects the data model.
 - Update `PROJECT-STATUS.md` on every meaningful change: milestone progress, item resolved, new known issue, phase transition.
@@ -46,6 +47,7 @@ Hand-written SQL files in `drizzle/migrations/` (numbered, immutable). Until aut
 
 Files written so far:
 - `drizzle/migrations/0000_init_auth.sql` — M2 (users, sessions, magic_link_tokens)
+- `drizzle/migrations/0001_user_settings.sql` — M3 (user_settings)
 
 ## Build-order deviations from TDD
 
