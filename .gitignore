@@ -3,6 +3,11 @@ node_modules/
 .pnp/
 .pnp.js
 .yarn/install-state.gz
+# Lock file regenerated locally by Claude Code's `npm install`; deps use "latest"
+# and Vercel resolves on each build. Committing it would pin versions across
+# environments — a deliberate non-choice for v1; reconsider when the build
+# stabilizes.
+package-lock.json
 
 # Build output
 .next/
