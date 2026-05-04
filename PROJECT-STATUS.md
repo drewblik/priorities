@@ -4,7 +4,7 @@
 
 ## Last Updated
 
-2026-05-03 (M3 in progress)
+2026-05-04 (M3 code complete — owner setup pending)
 
 ## Phase Status
 
@@ -22,7 +22,7 @@
 |---|-----------|--------|-------|
 | 1 | Project scaffold (Next.js 15 + Tailwind v4 + Drizzle + Lucia magic link) | ✅ | Verified 2026-05-03 — production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. Build pipeline working end-to-end: GitHub push → Vercel auto-deploy → preview URL. Lucia v3 dropped during M1 fix; magic link auth in M2 uses custom session management. |
 | 2 | Database setup + magic link auth flow (signin, auth callback, signout) | ✅ | Verified 2026-05-03. End-to-end magic link flow works on production (Neon DB live, Resend sending, session cookie persists, sign in + sign out both functional). Schema: `users`, `sessions`, `magic_link_tokens`. Custom session mgmt in `src/auth/`. |
-| 3 | User settings + Settings page skeleton | 🔨 | **Partial**: `user_settings` Drizzle table added to `src/db/schema.ts` and matching SQL migration `drizzle/migrations/0001_user_settings.sql` written. **Still TODO**: (a) apply migration in Neon SQL editor, (b) add `API_KEY_ENCRYPTION_KEY` env var in Vercel (`openssl rand -base64 32`), (c) write `src/lib/encryption.ts` (AES-GCM wrapper), (d) write `src/lib/settings.ts` (get/upsert with encryption), (e) build `/settings/profile` and `/settings/api-key` pages with tabs nav, (f) build `/api/settings` GET + PATCH route. |
+| 3 | User settings + Settings page skeleton | 🔨 | **Code complete; awaiting owner setup + production verification.** Encryption module (`src/lib/encryption.ts`, AES-256-GCM via `node:crypto`), settings data-access (`src/lib/settings.ts`), API route (`src/app/api/settings/route.ts`, GET + POST + PATCH, accepts JSON or form), and UI (`src/app/settings/{layout,page,profile/page,api-key/page,[tab]/page}.tsx` + `SettingsTabs.tsx`) all written. Tab nav shows Profile + API Key as functional and Calendar/Planning/Data as disabled placeholders pointing at M10/M14/M19. Home page got a Settings link. Typecheck passes. **Owner still needs**: (a) apply `drizzle/migrations/0001_user_settings.sql` in Neon's SQL editor, (b) set `API_KEY_ENCRYPTION_KEY` in Vercel (Production + Preview + Development) to the output of `openssl rand -base64 32`. After both, verify via the steps in the M3 plan. |
 | 4 | Priorities table + Council Home (Priorities List) read-only | ⬜ | Static list display first |
 | 5 | Manual Priority CRUD + drag-to-reorder (@dnd-kit) + pause/archive | ⬜ | Optimistic UI on reorder; selective-cascade soft-delete |
 | 6 | Priority Detail page with full edit | ⬜ | All structured core fields, memory entries CRUD, file uploads |
@@ -45,14 +45,10 @@
 
 ### Critical (blocking or near-term)
 
-- **Owner setup needed to close M2**:
-  1. Create a Neon Postgres database. Copy the **pooled** connection string (looks like `postgresql://...neon.tech/neondb?sslmode=require`).
-  2. Create a Resend account, get an API key. For now use Resend's `onboarding@resend.dev` sender (no domain verification needed). Set `EMAIL_FROM` in Vercel to `Priorities <onboarding@resend.dev>`.
-  3. In Vercel project Settings → Environment Variables, set `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, and `NEXT_PUBLIC_SITE_URL` (set to your production URL, e.g., `https://priorities-two.vercel.app`).
-  4. In Neon's SQL editor, paste and run the contents of `drizzle/migrations/0000_init_auth.sql`. This creates the `users`, `sessions`, `magic_link_tokens` tables.
-  5. Push the M2 commit. Vercel auto-rebuilds with the new env vars.
-  6. Verify: visit `/signin`, enter your email, check inbox, click link, land on `/` showing your email.
-  7. `API_KEY_ENCRYPTION_KEY` (`openssl rand -base64 32`) and `CRON_SECRET` are in `.env.example` but not needed until M3 / M10 — can defer.
+- **Owner setup needed to close M3** (do these in either order; both required before the Settings page works on the preview URL):
+  1. **Apply migration**: in Neon's SQL editor, paste and run the contents of `drizzle/migrations/0001_user_settings.sql`. Creates the `user_settings` table.
+  2. **Set encryption key**: in Vercel → Project Settings → Environment Variables, add `API_KEY_ENCRYPTION_KEY`. Generate locally with `openssl rand -base64 32` and paste the output. Apply to **Production, Preview, and Development** scopes. Treat this value as immutable for v1 — rotating it forces every user to re-enter their API key.
+  3. After both: open the latest preview deploy of `claude/read-prompt-mobile-xyEk8`, sign in, hit `/settings/profile`, then `/settings/api-key`, paste a fake key (`sk-ant-test-deadbeef`), confirm the status flips to "Key saved ✓". In Neon SQL editor, run `SELECT anthropic_api_key FROM user_settings WHERE user_id = '<your usr_*>'` and confirm it stores base64 ciphertext, NOT the plaintext.
 
 ### Important (next iteration)
 
@@ -147,7 +143,7 @@ Career, Money, Personal Growth candidates:
 
 Most recent at the top. Each entry: date + summary. Keep concise.
 
-- **2026-05-03 (M3 schema added)**: `user_settings` table added to Drizzle schema and matching SQL migration `0001_user_settings.sql` written. Owner switching from desktop to phone session here — next session resumes M3 from "schema ready, encryption + UI + API still TODO."
+- **2026-05-04 (M3 code complete on `claude/read-prompt-mobile-xyEk8`)**: First phone session. Built the rest of M3 on top of the existing schema. New files: `src/lib/encryption.ts` (AES-256-GCM via `node:crypto`, base64 envelope `iv||ciphertext||tag`, fail-fast key validation, never logs plaintext), `src/lib/settings.ts` (`getUserSettings`, `getSettingsView`, `getDecryptedAnthropicKey`, `applySettingsPatch` — encryption only at write/decrypt, not on render), `src/app/api/settings/route.ts` (GET + POST + PATCH, accepts JSON for API clients and form-encoded for HTML forms; zod-validated; redirects to `/settings/<tab>?saved=1` on form success), `src/app/settings/{layout,page,profile/page,api-key/page,[tab]/page}.tsx` + `SettingsTabs.tsx` (Profile + API Key functional; Calendar/Planning/Data show as disabled tabs with M10/M14/M19 hints). Home page (`src/app/page.tsx`) gained a Settings link. Encryption round-trip verified locally with random key (round-trip, tamper rejection, short-envelope rejection, missing-key + wrong-length-key error paths). `npm run typecheck` passes clean. `npm run lint` is blocked on a pre-existing project gap (no ESLint config — `next lint` prompts interactively); not introduced by M3. Owner setup (env var + migration) still required before the preview deploy works end-to-end — see Critical section above.
 - **2026-05-03 (M2 verified)**: End-to-end magic-link sign in works on production. M2 → ✅. CLAUDE.md added at repo root for future-session context.
 - **2026-05-03 (M2 code complete)**: Magic link auth + first DB tables. Schema: `users` / `sessions` / `magic_link_tokens` (`src/db/schema.ts`). Hand-written initial migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt in `src/auth/` (sessions, magic-link, cookie, public API). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Home `/` now redirects to `/signin` if not authed. Removed `oslo` from deps (using Node's built-in `crypto`).
 - **2026-05-03 (M1 verified)**: Production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. M1 complete.
