@@ -29,7 +29,6 @@
     "nanoid": "latest",
     "next": "^15",
     "next-pwa": "latest",
-    "oslo": "latest",
     "react": "^19",
     "react-dom": "^19",
     "react-markdown": "latest",

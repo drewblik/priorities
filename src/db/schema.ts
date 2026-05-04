@@ -1,14 +1,50 @@
-// Drizzle schema. Tables are populated as build milestones land:
-//   M2:  users, sessions, magic_link_tokens
-//   M3:  user_settings
-//   M4:  priorities
-//   M6:  priority_memory, priority_files
-//   M7:  quarters, quarter_week_focus
-//   M8:  tasks, events
-//   M10: calendar_feed_configs, calendar_feed_events
-//   M12: chat_sessions, chat_messages, generation_locks
-//
-// All user-content tables include `deleted_at timestamptz`. All IDs are text PKs
-// in the form `<prefix>_<nanoid(16)>` (see src/lib/id.ts).
+import {
+  pgTable,
+  text,
+  timestamp,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
-export {};
+// =============================================================================
+// M2: auth tables
+// =============================================================================
+
+export const users = pgTable(
+  'users',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull().unique(),
+    name: text('name'),
+    timezone: text('timezone').notNull().default('America/Los_Angeles'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [index('idx_users_email').on(table.email)],
+);
+
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+export const magicLinkTokens = pgTable(
+  'magic_link_tokens',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('idx_magic_link_tokens_email').on(table.email, table.expiresAt)],
+);
+
+export type User = typeof users.$inferSelect;
+export type Session = typeof sessions.$inferSelect;
+export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;

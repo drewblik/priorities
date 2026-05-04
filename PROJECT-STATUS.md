@@ -4,7 +4,7 @@
 
 ## Last Updated
 
-2026-05-03
+2026-05-03 (M2 in progress)
 
 ## Phase Status
 
@@ -20,8 +20,8 @@
 
 | # | Milestone | Status | Notes |
 |---|-----------|--------|-------|
-| 1 | Project scaffold (Next.js 15 + Tailwind v4 + Drizzle + Lucia magic link) | 🔨 | Code written 2026-05-03 — empty Next.js app, design docs preserved at root, `PROJECT-STATUS.md` copied from `priorities-project-status.md`. Files staged for git commit but not yet committed (git user.name/user.email not configured locally; owner must complete the initial commit). Acceptance gate pending: empty app deploys to Vercel preview URL and `/` returns 200. |
-| 2 | Database setup + magic link auth flow (signin, auth callback, signout) | ⬜ | Includes `users`, `sessions`, `magic_link_tokens` tables, Resend integration, replay protection (TDD §Subsystem 7) |
+| 1 | Project scaffold (Next.js 15 + Tailwind v4 + Drizzle + Lucia magic link) | ✅ | Verified 2026-05-03 — production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. Build pipeline working end-to-end: GitHub push → Vercel auto-deploy → preview URL. Lucia v3 dropped during M1 fix; magic link auth in M2 uses custom session management. |
+| 2 | Database setup + magic link auth flow (signin, auth callback, signout) | 🔨 | Code complete 2026-05-03. Schema: `users`, `sessions`, `magic_link_tokens` (see `src/db/schema.ts`). SQL migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt (no Lucia) in `src/auth/` — sessions DB id = `sha256(token).hex()` (Lucia post-sunset pattern; one intentional deviation from `<prefix>_<nanoid>` convention, justified by security). 30-day session TTL with sliding renewal. 15-min magic link TTL with single-use replay protection (atomic `used_at` flip). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Awaits owner setup (Neon DB + Resend API key + env vars + apply migration + push) before verification. |
 | 3 | User settings + Settings page skeleton | ⬜ | Tabs, profile tab, API key tab with AES-GCM encryption |
 | 4 | Priorities table + Council Home (Priorities List) read-only | ⬜ | Static list display first |
 | 5 | Manual Priority CRUD + drag-to-reorder (@dnd-kit) + pause/archive | ⬜ | Optimistic UI on reorder; selective-cascade soft-delete |
@@ -45,8 +45,14 @@
 
 ### Critical (blocking or near-term)
 
-- **Owner setup needed to close M1**: (1) configure git identity locally (`git config user.email <your-email>`, `git config user.name <your-name>`), (2) commit staged files, (3) create GitHub repo and push, (4) connect repo to Vercel, (5) verify the empty app deploys and `/` returns 200 on the preview URL. Once that's confirmed, M1 status → ✅.
-- **Owner setup needed before M2**: create Neon database (get `DATABASE_URL`), create Resend account (get `RESEND_API_KEY` + verify sender), generate `API_KEY_ENCRYPTION_KEY` (`openssl rand -base64 32`), set env vars in Vercel. See `.env.example` for the full list. Per TDD §Build Approach, the dev environment is claude.ai/code in cloud sandboxes — this scaffold session was on Windows desktop without Node.js, so no `npm install` was run locally. First Vercel build will install dependencies and generate the lockfile.
+- **Owner setup needed to close M2**:
+  1. Create a Neon Postgres database. Copy the **pooled** connection string (looks like `postgresql://...neon.tech/neondb?sslmode=require`).
+  2. Create a Resend account, get an API key. For now use Resend's `onboarding@resend.dev` sender (no domain verification needed). Set `EMAIL_FROM` in Vercel to `Priorities <onboarding@resend.dev>`.
+  3. In Vercel project Settings → Environment Variables, set `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, and `NEXT_PUBLIC_SITE_URL` (set to your production URL, e.g., `https://priorities-two.vercel.app`).
+  4. In Neon's SQL editor, paste and run the contents of `drizzle/migrations/0000_init_auth.sql`. This creates the `users`, `sessions`, `magic_link_tokens` tables.
+  5. Push the M2 commit. Vercel auto-rebuilds with the new env vars.
+  6. Verify: visit `/signin`, enter your email, check inbox, click link, land on `/` showing your email.
+  7. `API_KEY_ENCRYPTION_KEY` (`openssl rand -base64 32`) and `CRON_SECRET` are in `.env.example` but not needed until M3 / M10 — can defer.
 
 ### Important (next iteration)
 
@@ -141,7 +147,9 @@ Career, Money, Personal Growth candidates:
 
 Most recent at the top. Each entry: date + summary. Keep concise.
 
-- **2026-05-03 (M1 fix)**: Removed `lucia` and `@lucia-auth/adapter-postgresql` from package.json — the adapter's peer-dep range broke the first Vercel build and Lucia v3 was sunset by its maintainer in late 2024. M2 will roll session management directly per Lucia's official sunset migration guidance (oslo + Drizzle).
+- **2026-05-03 (M2 code complete)**: Magic link auth + first DB tables. Schema: `users` / `sessions` / `magic_link_tokens` (`src/db/schema.ts`). Hand-written initial migration: `drizzle/migrations/0000_init_auth.sql`. Custom session mgmt in `src/auth/` (sessions, magic-link, cookie, public API). Resend wrapper in `src/lib/email.ts`. Routes: `/signin`, `/api/auth/magic-link`, `/api/auth/callback`, `/api/auth/signout`. Home `/` now redirects to `/signin` if not authed. Removed `oslo` from deps (using Node's built-in `crypto`). Awaiting owner setup of Neon + Resend + env vars.
+- **2026-05-03 (M1 verified)**: Production URL `priorities-two.vercel.app` returns 200 on `/` and `/api/healthcheck`. M1 complete.
+- **2026-05-03 (M1 fix)**: Removed `lucia` and `@lucia-auth/adapter-postgresql` from package.json — the adapter's peer-dep range broke the first Vercel build and Lucia v3 was sunset by its maintainer in late 2024. M2 rolls session management directly per Lucia's official sunset migration guidance.
 - **2026-05-03 (M1 scaffold)**: Project scaffolded as Next.js 15 + Tailwind v4 + Drizzle + Lucia + shadcn-style utilities. Created `package.json` (deps from TDD §Stack package list), `tsconfig.json`, `next.config.mjs`, `postcss.config.mjs`, `drizzle.config.ts`, `.env.example`, `.gitignore`. Initial folder layout: `src/app/`, `src/db/`, `src/lib/`, plus stub `src/db/schema.ts` (populated milestone-by-milestone) and `src/db/client.ts` (Neon serverless). Created `src/lib/utils.ts` (cn helper) and `src/lib/id.ts` (`<prefix>_<nanoid(16)>` helper). Initial routes: `/` placeholder home + `/api/healthcheck`. README rewritten as project README pointing at design docs and PROJECT-STATUS. Git repo initialized. **Deviation tracking**: cost circuit breaker pulled forward to M12 (TDD §Security requires it before any LLM call); data export added to M19 (acceptance criterion #13).
 
 - **2026-05-03 (final audit)**: Comprehensive cross-doc audit pass. Findings resolved:
