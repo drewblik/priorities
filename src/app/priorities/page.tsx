@@ -1,11 +1,37 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { getPrioritiesForUser } from '@/lib/priorities';
-import { PriorityCard } from './PriorityCard';
+import { PrioritiesList } from './PrioritiesList';
 
-export default async function CouncilHomePage() {
+type SearchParams = { [key: string]: string | string[] | undefined };
+
+const TOAST_COPY: Record<string, { tone: 'success' | 'error'; message: string }> = {
+  created: { tone: 'success', message: 'Priority created.' },
+  saved: { tone: 'success', message: 'Saved.' },
+  deleted: { tone: 'success', message: 'Priority deleted.' },
+  not_found: { tone: 'error', message: 'That Priority could not be found.' },
+};
+
+export default async function CouncilHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const session = await requireUser();
-  const priorities = await getPrioritiesForUser(session.user.id);
+  const sp = await searchParams;
+  const showArchived = sp.archived === '1';
+  const all = await getPrioritiesForUser(session.user.id, { includeArchived: showArchived });
+
+  // Toast on success/error query params from form-post redirects.
+  const toast = (() => {
+    for (const key of Object.keys(TOAST_COPY)) {
+      if (sp[key] === '1') return TOAST_COPY[key];
+    }
+    if (typeof sp.error === 'string') {
+      return TOAST_COPY[sp.error] ?? { tone: 'error', message: 'Something went wrong.' };
+    }
+    return null;
+  })();
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl p-6">
@@ -34,36 +60,44 @@ export default async function CouncilHomePage() {
         </div>
       </header>
 
-      {/* M7 will add quarter info here. M11+ will add planning status banners. */}
+      {toast ? (
+        <div
+          role="status"
+          className={`mt-4 rounded-md border px-3 py-2 text-sm ${
+            toast.tone === 'success'
+              ? 'border-green-600/30 bg-green-600/5 text-green-700'
+              : 'border-red-600/30 bg-red-600/5 text-red-700'
+          }`}
+        >
+          {toast.message}
+        </div>
+      ) : null}
 
-      <section className="mt-6">
-        {priorities.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <ul className="space-y-2">
-            {priorities.map((priority) => (
-              <li key={priority.id}>
-                <PriorityCard priority={priority} />
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="mt-6 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {all.length} {all.length === 1 ? 'Priority' : 'Priorities'}
+          {showArchived ? ' (including archived)' : ''}
+        </p>
+        <Link
+          href={showArchived ? '/priorities' : '/priorities?archived=1'}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          {showArchived ? 'Hide archived' : 'Show archived'}
+        </Link>
+      </div>
+
+      <section className="mt-3">
+        <PrioritiesList initial={all} />
       </section>
 
-      <p className="mt-8 text-xs text-muted-foreground">
-        M4 (read-only Council Home) live. Creating, editing, and reordering Priorities arrives in M5.
-      </p>
+      <div className="mt-6 flex justify-center">
+        <Link
+          href="/priorities/new"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
+          + Create Priority
+        </Link>
+      </div>
     </main>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-md border border-dashed border-border bg-muted/40 px-4 py-8 text-center">
-      <p className="text-sm font-medium text-foreground">No Priorities yet.</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        The Create Priority button arrives in M5. For now, this is just the read-only list scaffold.
-      </p>
-    </div>
   );
 }

@@ -6,6 +6,14 @@ const STATUS_STYLES: Record<string, string> = {
   archived: 'border-border bg-muted text-muted-foreground',
 };
 
+const STYLE_FONT: Record<string, string> = {
+  classic: 'ui-sans-serif, system-ui, sans-serif',
+  rounded:
+    'ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, Comfortaa, sans-serif',
+  serif: 'ui-serif, Georgia, "Times New Roman", serif',
+  script: '"Snell Roundhand", "Apple Chancery", "Brush Script MT", cursive',
+};
+
 function formatMinutes(min: number, max: number): string {
   if (min === 0 && max === 0) return 'No weekly target set';
   if (min === max) return `${min} min/week`;
@@ -14,18 +22,18 @@ function formatMinutes(min: number, max: number): string {
 
 export function PriorityCard({ priority }: { priority: Priority }) {
   const statusClass = STATUS_STYLES[priority.status] ?? STATUS_STYLES.archived;
-  const color =
-    typeof priority.icon === 'object' && priority.icon && 'color' in priority.icon
-      ? (priority.icon.color as string)
-      : '#3b82f6';
+  const icon = priority.icon ?? { color: '#3b82f6', style: 'classic' };
+  const fontFamily = STYLE_FONT[icon.style] ?? STYLE_FONT.classic;
 
   return (
     <article className="flex items-start gap-3 rounded-md border border-border bg-background px-4 py-3">
       <span
         aria-hidden
-        className="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
-        style={{ backgroundColor: color }}
-      />
+        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-2xl font-semibold leading-none"
+        style={{ color: icon.color, fontFamily }}
+      >
+        P
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-medium text-foreground">{priority.name}</h3>
