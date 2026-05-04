@@ -87,7 +87,7 @@ export default async function CouncilHomePage({
       </div>
 
       <section className="mt-3">
-        <PrioritiesList initial={all} />
+        <PrioritiesList key={showArchived ? 'archived' : 'active'} initial={all} />
       </section>
 
       <div className="mt-6 flex justify-center">
