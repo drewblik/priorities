@@ -48,6 +48,7 @@ Hand-written SQL files in `drizzle/migrations/` (numbered, immutable). Until aut
 Files written so far:
 - `drizzle/migrations/0000_init_auth.sql` — M2 (users, sessions, magic_link_tokens)
 - `drizzle/migrations/0001_user_settings.sql` — M3 (user_settings)
+- `drizzle/migrations/0002_priorities.sql` — M4 (priorities)
 
 ## Build-order deviations from TDD
 

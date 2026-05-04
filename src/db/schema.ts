@@ -7,6 +7,7 @@ import {
   integer,
   numeric,
   time,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // =============================================================================
@@ -72,3 +73,48 @@ export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type MagicLinkToken = typeof magicLinkTokens.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
+
+// =============================================================================
+// M4: priorities (council of priorities, read-only list)
+// =============================================================================
+
+export type PriorityIcon = { color: string; style: string };
+
+export const priorities = pgTable(
+  'priorities',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    icon: jsonb('icon')
+      .$type<PriorityIcon>()
+      .notNull()
+      .default({ color: '#3b82f6', style: 'classic' }),
+    smartGoal: text('smart_goal'),
+    quarterlyStrategy: text('quarterly_strategy'),
+    weeklyStrategy: text('weekly_strategy'),
+    dailyStrategy: text('daily_strategy'),
+    minMinutesPerWeek: integer('min_minutes_per_week').notNull().default(0),
+    maxMinutesPerWeek: integer('max_minutes_per_week').notNull().default(0),
+    checkInCadence: text('check_in_cadence')
+      .array()
+      .notNull()
+      .default(['quarterly', 'weekly', 'daily']),
+    status: text('status').notNull().default('active'), // active|paused|archived
+    position: integer('position').notNull(),
+    pinnedSummary: text('pinned_summary'),
+    subAppUrl: text('sub_app_url'),
+    subAppAuthTokenEncrypted: text('sub_app_auth_token_encrypted'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_priorities_user_position').on(table.userId, table.position),
+    index('idx_priorities_user_status').on(table.userId, table.status),
+  ],
+);
+
+export type Priority = typeof priorities.$inferSelect;
