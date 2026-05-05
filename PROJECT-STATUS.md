@@ -144,6 +144,16 @@ Career, Money, Personal Growth candidates:
 - Connection pool tuning if scale demands
 - Edge runtime optimization for cold-start latency
 
+### Phase 3+ vision (post-v2, animation-heavy, deferred)
+
+- **Personified Priority entities living on the home screen.** Each Priority becomes a wandering animated character (Wii-menu / Terraria-NPC vibe). Home screen shows them moving around in their own little spaces — each Priority has a "room" it inhabits. To trigger planning, the user "rounds them up" and they line up to talk. Council Home becomes an ambient diorama instead of a vertical list of cards. Implications:
+  - Significant animation surface area — sprite/avatar generation per Priority (color + style currently in `priorities.icon` is the seed), idle motion loops, transition into "lined up" pose, gesture-based round-up interaction.
+  - Per-Priority avatar customization in the Priority Detail page (icon today, full character later).
+  - Planning sessions retain their current functionality (Quarter / Week / Day) but the entry surface changes: instead of "tap Plan Quarter" → list page, you summon the council and they form the queue visually.
+  - Priority chat sessions could be voice-acted ambient lines while idle ("Health: drink water!", "Career: have you reviewed today's calendar?") — opt-in.
+  - Heavy lift: probably PixiJS or a similar 2D engine, sprite assets (could be AI-generated per Priority's color + style), state management for character animations, performance tuning so the home screen stays under one frame budget on phones.
+  - Slot: post-v2, after the AI-driven planning loop is fully stable and the platform improvements above have landed. The hard prerequisite is "the app is genuinely useful and you actually use it daily" — animation-heavy charm comes after substance.
+
 ## Recent Changes
 
 Most recent at the top. Each entry: date + summary. Keep concise.
