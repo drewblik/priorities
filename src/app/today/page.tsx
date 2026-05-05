@@ -44,7 +44,7 @@ export default async function TodayPage({
   const todayISO = currentDateInTz(tz);
   const dateISO = pickDate(sp, todayISO);
 
-  const data = await fetchDailyData(session.user.id, dateISO);
+  const data = await fetchDailyData(session.user.id, dateISO, tz);
 
   const toast = (() => {
     for (const key of Object.keys(TOAST_COPY)) {

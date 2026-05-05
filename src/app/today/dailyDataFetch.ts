@@ -22,10 +22,14 @@ export type DailyData = {
  * out defensively — the foreign-key cascade keeps this rare but possible during
  * the brief window of a soft-delete cascade.
  */
-export async function fetchDailyData(userId: string, dateISO: string): Promise<DailyData> {
+export async function fetchDailyData(
+  userId: string,
+  dateISO: string,
+  userTimezone: string,
+): Promise<DailyData> {
   const [tasks, events, priorities] = await Promise.all([
     getTasksForDate(userId, dateISO),
-    getEventsForDateRange(userId, dateISO, dateISO),
+    getEventsForDateRange(userId, dateISO, dateISO, userTimezone),
     getPrioritiesForUser(userId, { includeArchived: true }),
   ]);
 
