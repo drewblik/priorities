@@ -53,6 +53,7 @@ Files written so far:
 - `drizzle/migrations/0004_quarters.sql` — M7 (quarters)
 - `drizzle/migrations/0005_tasks_and_events.sql` — M8 (tasks, events)
 - `drizzle/migrations/0006_calendar_feeds.sql` — M10 (calendar_feed_configs, calendar_feed_events)
+- `drizzle/migrations/0007_calendar_feed_events_all_day.sql` — M10 hotfix (all_day flag)
 
 ## Build-order deviations from TDD
 

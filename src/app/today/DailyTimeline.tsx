@@ -76,7 +76,10 @@ export function DailyTimeline({ items, userTimezone, redirectBack }: Props) {
                 id={fe.id}
                 title={fe.title}
                 description={fe.description}
-                timeRange={timeRangeOnly(fe.startTime, fe.endTime, userTimezone)}
+                timeRange={
+                  fe.allDay ? null : timeRangeOnly(fe.startTime, fe.endTime, userTimezone)
+                }
+                allDay={fe.allDay}
                 sourceName={item.sourceName}
                 isRemoved={fe.removedFromSourceAt !== null}
               />

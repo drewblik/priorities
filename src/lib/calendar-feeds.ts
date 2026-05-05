@@ -1,6 +1,6 @@
 import { addDays, format, parseISO } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
-import { and, asc, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import {
   calendarFeedConfigs,
@@ -172,9 +172,16 @@ export async function recordFeedSyncResult(
 
 /**
  * User-TZ-bounded read for Daily View. Returns active (not removed) feed
- * events whose start_time falls on any calendar date in [startISO, endISO]
- * interpreted in the user's timezone — same fromZonedTime pattern as the
- * M9 hotfix in events.ts so a "May 4 10:32 PM PT" event renders on May 4.
+ * events for any calendar date in [startISO, endISO] interpreted in the
+ * user's timezone.
+ *
+ * Two predicate paths so all-day events bucket correctly regardless of TZ:
+ *   - Timed events: `start_time` falls within the user-TZ day's UTC bounds
+ *     (computed via fromZonedTime — the M9 hotfix pattern).
+ *   - All-day events: `start_time::date` is in [startISO, endISO]. ICS
+ *     all-day events store start_time at midnight UTC of the calendar date,
+ *     so casting to ::date gives the source's intended calendar day directly,
+ *     no TZ shift.
  */
 export async function getCalendarFeedEventsForRange(
   userId: string,
@@ -190,9 +197,16 @@ export async function getCalendarFeedEventsForRange(
     .where(
       and(
         eq(calendarFeedEvents.userId, userId),
-        gte(calendarFeedEvents.startTime, startUtc),
-        lte(calendarFeedEvents.startTime, endUtc),
         isNull(calendarFeedEvents.removedFromSourceAt),
+        sql`(
+          (${calendarFeedEvents.allDay} = false
+            AND ${calendarFeedEvents.startTime} >= ${startUtc}
+            AND ${calendarFeedEvents.startTime} <= ${endUtc})
+          OR
+          (${calendarFeedEvents.allDay} = true
+            AND ${calendarFeedEvents.startTime}::date >= ${startISO}::date
+            AND ${calendarFeedEvents.startTime}::date <= ${endISO}::date)
+        )`,
       ),
     )
     .orderBy(asc(calendarFeedEvents.startTime));

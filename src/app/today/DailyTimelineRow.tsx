@@ -39,7 +39,8 @@ export type DailyFeedEventRowProps = {
   id: string;
   title: string;
   description: string | null;
-  timeRange: string;
+  timeRange: string | null;
+  allDay: boolean;
   sourceName: string;
   isRemoved: boolean;
 };
@@ -175,7 +176,7 @@ function FeedEventBody(props: DailyFeedEventRowProps) {
         <span className="rounded-full border border-border bg-muted px-2 py-0.5 uppercase tracking-wide">
           Calendar
         </span>
-        <span>· {props.timeRange}</span>
+        <span>· {props.allDay ? 'All day' : props.timeRange}</span>
         {props.isRemoved ? (
           <span className="text-amber-700">· removed from source</span>
         ) : null}

@@ -16,6 +16,7 @@ export type ParsedEvent = {
   description: string | null;
   startTime: Date;
   endTime: Date;
+  allDay: boolean;
 };
 
 export type SyncFeedResult = {
@@ -79,12 +80,14 @@ export function parseIcs(
         if (next.compare(horizonStart) < 0) continue;
         try {
           const occ = event.getOccurrenceDetails(next);
+          const allDay = occ.startDate.isDate === true;
           out.push({
             externalId: `${event.uid}__${occ.startDate.toString()}`,
             title: occ.item.summary || '(no title)',
             description: occ.item.description || null,
             startTime: occ.startDate.toJSDate(),
             endTime: occ.endDate.toJSDate(),
+            allDay,
           });
         } catch {
           // Some recurrence-id exceptions throw; skip and continue.
@@ -95,12 +98,14 @@ export function parseIcs(
       if (!start) continue;
       if (start < horizon.start || start > horizon.end) continue;
       const end = event.endDate?.toJSDate() ?? new Date(start.getTime() + 30 * 60_000);
+      const allDay = event.startDate?.isDate === true;
       out.push({
         externalId: event.uid,
         title: event.summary || '(no title)',
         description: event.description || null,
         startTime: start,
         endTime: end,
+        allDay,
       });
     }
   }
@@ -141,6 +146,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
       description: e.description,
       startTime: e.startTime,
       endTime: e.endTime,
+      allDay: e.allDay,
       lastSyncedAt: startedAt,
       removedFromSourceAt: null,
     }));
@@ -154,6 +160,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
           description: sql`excluded.description`,
           startTime: sql`excluded.start_time`,
           endTime: sql`excluded.end_time`,
+          allDay: sql`excluded.all_day`,
           lastSyncedAt: sql`excluded.last_synced_at`,
           removedFromSourceAt: sql`NULL`,
         },

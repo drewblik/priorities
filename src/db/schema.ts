@@ -354,6 +354,7 @@ export const calendarFeedEvents = pgTable(
     description: text('description'),
     startTime: timestamp('start_time', { withTimezone: true }).notNull(),
     endTime: timestamp('end_time', { withTimezone: true }).notNull(),
+    allDay: boolean('all_day').notNull().default(false),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
     removedFromSourceAt: timestamp('removed_from_source_at', { withTimezone: true }),
   },
