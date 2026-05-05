@@ -53,7 +53,15 @@
 
 ### Nice-to-have (backlog)
 
-_None yet — populate as issues surface during build._
+- **Prompt engineering tooling for AI flows (post-v1).** v1 ships the 8 verbatim TDD prompts as fixed strings — CLAUDE.md's "do not paraphrase" rule keeps them locked through M12-M18 so we have a known baseline. Once the AI flows are working, we want owner-tunable prompts + tighter context budgets per flow so cheaper models like Haiku can carry more of the load. Premise: well-engineered prompts + tight context get Haiku to ~80-90% of Sonnet quality on structured tasks; the bottleneck for cheap models isn't raw capability, it's susceptibility to noise + ambiguity, both of which we control via prompt design. Surface area:
+  - **Per-flow prompt editor** with version history + diff vs. TDD baseline + "reset to baseline" button. Per flow = Quarter / Week / Day planning, Master Chat preview/confirm, Onboarding Coach interview/proposal, Memory Summarization (8 flows total).
+  - **Per-flow context budget knobs** — how many memory entries to include (recent N, or filter by tag), how many past sessions to include, calendar feed window size, whether to include Priority's pinned summary vs. full memory, etc.
+  - **Per-flow model override** — currently `selected_model` is a single global value (M11 follow-up). A per-flow override means "Haiku for daily check-in, Sonnet for quarterly planning, Opus for re-planning under conflict."
+  - **Sandbox mode** for testing a prompt against canned state (a saved snapshot of priorities + memory + calendar) without burning real cost or polluting real data.
+  - **Cost telemetry per flow** so we can see which flows are expensive and which are cheap, and where optimization pays off.
+  - **A/B harness** — run two prompt variants side-by-side on the same input, eyeball or score the outputs.
+  
+  Slot: not a v1 milestone. Likely a v1.5 enhancement after M20 polish. Designed with a clean separation between "default prompts (TDD baseline, version-pinned)" and "user overrides" so the canonical prompts remain a known reference.
 
 ## Acceptable v1 Limitations (Known Gaps)
 
