@@ -80,6 +80,24 @@ function addDaysISO(iso: string, days: number): string {
 // DB-backed helpers
 // =============================================================================
 
+export async function getQuarterById(
+  userId: string,
+  id: string,
+): Promise<Quarter | null> {
+  const rows = await db
+    .select()
+    .from(quarters)
+    .where(
+      and(
+        eq(quarters.id, id),
+        eq(quarters.userId, userId),
+        isNull(quarters.deletedAt),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getActiveQuarter(userId: string): Promise<Quarter | null> {
   const rows = await db
     .select()

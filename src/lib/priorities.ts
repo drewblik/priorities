@@ -31,6 +31,21 @@ export async function getPrioritiesForUser(
   return opts.includeArchived ? rows : rows.filter((row) => row.status !== 'archived');
 }
 
+/**
+ * Active priorities (not paused, not archived) whose check_in_cadence array
+ * includes 'quarterly'. Ordered by position. Used by the Quarter Plan page
+ * (M11) as the queue of priorities that get planned each quarter.
+ */
+export async function getQuarterlyPlanningQueue(userId: string): Promise<Priority[]> {
+  const all = await getPrioritiesForUser(userId);
+  return all.filter(
+    (p) =>
+      p.status === 'active' &&
+      Array.isArray(p.checkInCadence) &&
+      (p.checkInCadence as string[]).includes('quarterly'),
+  );
+}
+
 export async function getPriorityById(
   userId: string,
   id: string,
