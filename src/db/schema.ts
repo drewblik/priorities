@@ -10,6 +10,7 @@ import {
   jsonb,
   boolean,
   date,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -193,3 +194,111 @@ export const quarters = pgTable(
 );
 
 export type Quarter = typeof quarters.$inferSelect;
+
+// =============================================================================
+// M8: tasks + events (manual CRUD via Priority Detail; planning chatbots in
+// M12+ write here too. Subsystem 12 recurrence engine: rows with recurrence!=null
+// are templates; instances are computed at query time; per-instance edits create
+// override rows via instance_of_*_id)
+// =============================================================================
+
+export type Recurrence = {
+  type: 'daily' | 'weekly' | 'monthly';
+  interval: number;
+  byday?: ('MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU')[];
+  bymonthday?: number;
+  until?: string; // ISO date YYYY-MM-DD
+};
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: text('id').primaryKey(),
+    ownerPriorityId: text('owner_priority_id')
+      .notNull()
+      .references(() => priorities.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    targetDate: date('target_date'),
+    timeBlockStart: timestamp('time_block_start', { withTimezone: true }),
+    timeBlockEnd: timestamp('time_block_end', { withTimezone: true }),
+    recurrence: jsonb('recurrence').$type<Recurrence>(),
+    instanceOfTaskId: text('instance_of_task_id').references((): AnyPgColumn => tasks.id, {
+      onDelete: 'cascade',
+    }),
+    status: text('status').notNull().default('open'), // open|done|skipped
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_tasks_user_target')
+      .on(table.userId, table.targetDate)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.status} = 'open'`),
+    index('idx_tasks_priority_status')
+      .on(table.ownerPriorityId, table.status)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_tasks_time_block')
+      .on(table.userId, table.timeBlockStart)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.timeBlockStart} IS NOT NULL`),
+    index('idx_tasks_recurrence')
+      .on(table.userId)
+      .where(
+        sql`${table.recurrence} IS NOT NULL AND ${table.instanceOfTaskId} IS NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    index('idx_tasks_instance_of')
+      .on(table.instanceOfTaskId, table.targetDate)
+      .where(sql`${table.instanceOfTaskId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+  ],
+);
+
+export const events = pgTable(
+  'events',
+  {
+    id: text('id').primaryKey(),
+    ownerPriorityId: text('owner_priority_id')
+      .notNull()
+      .references(() => priorities.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    startTime: timestamp('start_time', { withTimezone: true }).notNull(),
+    endTime: timestamp('end_time', { withTimezone: true }).notNull(),
+    recurrence: jsonb('recurrence').$type<Recurrence>(),
+    instanceOfEventId: text('instance_of_event_id').references((): AnyPgColumn => events.id, {
+      onDelete: 'cascade',
+    }),
+    completionStatus: text('completion_status'), // null|attended|missed
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_events_user_start')
+      .on(table.userId, table.startTime)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_events_priority')
+      .on(table.ownerPriorityId, table.startTime)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_events_recurrence')
+      .on(table.userId)
+      .where(
+        sql`${table.recurrence} IS NOT NULL AND ${table.instanceOfEventId} IS NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    index('idx_events_instance_of')
+      .on(table.instanceOfEventId, table.startTime)
+      .where(sql`${table.instanceOfEventId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+  ],
+);
+
+export type Task = typeof tasks.$inferSelect;
+export type TaskInsert = typeof tasks.$inferInsert;
+export type Event = typeof events.$inferSelect;
+export type EventInsert = typeof events.$inferInsert;

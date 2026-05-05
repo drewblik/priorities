@@ -2,21 +2,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { priorities, priorityMemory, type PriorityMemory } from '@/db/schema';
 import { newId } from '@/lib/id';
-
-async function verifyPriorityOwnership(userId: string, priorityId: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: priorities.id })
-    .from(priorities)
-    .where(
-      and(
-        eq(priorities.id, priorityId),
-        eq(priorities.userId, userId),
-        isNull(priorities.deletedAt),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
-}
+import { verifyPriorityOwnership } from '@/lib/priority-ownership';
 
 export async function getMemoryForPriority(
   userId: string,

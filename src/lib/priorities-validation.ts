@@ -143,6 +143,222 @@ export type UpdatePriorityBody = z.infer<typeof UpdatePrioritySchema>;
 export type CreateMemoryBody = z.infer<typeof CreateMemorySchema>;
 export type UpdateMemoryBody = z.infer<typeof UpdateMemorySchema>;
 
+// =============================================================================
+// M8: tasks + events + recurrence validation
+// =============================================================================
+
+export const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
+export const TASK_STATUSES = ['open', 'done', 'skipped'] as const;
+export const EVENT_COMPLETION_STATUSES = ['attended', 'missed'] as const;
+export const RECURRENCE_TYPES = ['daily', 'weekly', 'monthly'] as const;
+
+const ISO_DATE = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
+
+// HTML datetime-local: "YYYY-MM-DDTHH:mm" (no seconds, no TZ).
+// We accept either that or full ISO datetime; routes convert to UTC Date.
+const DATETIME_LOCAL = z
+  .string()
+  .trim()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/,
+    'expected YYYY-MM-DDTHH:mm',
+  );
+
+const RecurrenceDaily = z.object({
+  type: z.literal('daily'),
+  interval: z.number().int().min(1).max(365),
+  until: ISO_DATE.optional(),
+});
+
+const RecurrenceWeekly = z.object({
+  type: z.literal('weekly'),
+  interval: z.number().int().min(1).max(52),
+  byday: z.array(z.enum(WEEKDAYS)).min(1).max(7),
+  until: ISO_DATE.optional(),
+});
+
+const RecurrenceMonthly = z.object({
+  type: z.literal('monthly'),
+  interval: z.number().int().min(1).max(12),
+  bymonthday: z.number().int().min(1).max(31),
+  until: ISO_DATE.optional(),
+});
+
+export const RecurrenceSchema = z.discriminatedUnion('type', [
+  RecurrenceDaily,
+  RecurrenceWeekly,
+  RecurrenceMonthly,
+]);
+
+const TitleField = z.string().trim().min(1).max(200);
+const DescField = z.union([z.string().trim().max(2000), z.null()]).optional();
+
+export const CreateTaskSchema = z
+  .object({
+    ownerPriorityId: z.string().min(1),
+    title: TitleField,
+    description: DescField,
+    targetDate: z.union([ISO_DATE, z.null()]).optional(),
+    timeBlockStart: z.union([DATETIME_LOCAL, z.null()]).optional(),
+    timeBlockEnd: z.union([DATETIME_LOCAL, z.null()]).optional(),
+    recurrence: z.union([RecurrenceSchema, z.null()]).optional(),
+  })
+  .refine(
+    (v) => {
+      const startSet = !!v.timeBlockStart;
+      const endSet = !!v.timeBlockEnd;
+      return startSet === endSet;
+    },
+    { message: 'time_block_start and time_block_end must both be set or both null' },
+  )
+  .refine((v) => !v.recurrence || !!v.targetDate, {
+    message: 'recurring tasks require a target_date (start of pattern)',
+    path: ['targetDate'],
+  });
+
+export const UpdateTaskSchema = z
+  .object({
+    title: TitleField.optional(),
+    description: DescField,
+    targetDate: z.union([ISO_DATE, z.null()]).optional(),
+    timeBlockStart: z.union([DATETIME_LOCAL, z.null()]).optional(),
+    timeBlockEnd: z.union([DATETIME_LOCAL, z.null()]).optional(),
+    recurrence: z.union([RecurrenceSchema, z.null()]).optional(),
+    status: z.enum(TASK_STATUSES).optional(),
+  })
+  .refine(
+    (v) => {
+      // Allow patch where only one of start/end is included by leaving the other untouched.
+      // Only enforce paired-ness when both keys are explicitly present.
+      if (!('timeBlockStart' in v) && !('timeBlockEnd' in v)) return true;
+      if ('timeBlockStart' in v && 'timeBlockEnd' in v) {
+        return !!v.timeBlockStart === !!v.timeBlockEnd;
+      }
+      return true;
+    },
+    { message: 'time_block_start and time_block_end must both be patched together' },
+  );
+
+export const CompleteTaskSchema = z.object({
+  status: z.enum(TASK_STATUSES).optional(),
+});
+
+export const CreateEventSchema = z.object({
+  ownerPriorityId: z.string().min(1),
+  title: TitleField,
+  description: DescField,
+  startTime: DATETIME_LOCAL,
+  endTime: DATETIME_LOCAL,
+  recurrence: z.union([RecurrenceSchema, z.null()]).optional(),
+});
+
+export const UpdateEventSchema = z.object({
+  title: TitleField.optional(),
+  description: DescField,
+  startTime: DATETIME_LOCAL.optional(),
+  endTime: DATETIME_LOCAL.optional(),
+  recurrence: z.union([RecurrenceSchema, z.null()]).optional(),
+  completionStatus: z.union([z.enum(EVENT_COMPLETION_STATUSES), z.null()]).optional(),
+});
+
+export type Recurrence = z.infer<typeof RecurrenceSchema>;
+export type CreateTaskBody = z.infer<typeof CreateTaskSchema>;
+export type UpdateTaskBody = z.infer<typeof UpdateTaskSchema>;
+export type CreateEventBody = z.infer<typeof CreateEventSchema>;
+export type UpdateEventBody = z.infer<typeof UpdateEventSchema>;
+
+/**
+ * Pull recurrence_* fields out of a form payload and assemble the
+ * Recurrence jsonb shape. Returns null if recurrence_type is empty/none.
+ */
+export function formDataToRecurrence(form: FormData): Recurrence | null {
+  const type = form.get('recurrence_type');
+  if (typeof type !== 'string' || type === '' || type === 'none') return null;
+  const interval = Number.parseInt((form.get('recurrence_interval') as string) ?? '1', 10);
+  const untilRaw = form.get('recurrence_until');
+  const until =
+    typeof untilRaw === 'string' && untilRaw.length > 0 ? untilRaw : undefined;
+
+  if (type === 'daily') {
+    return { type: 'daily', interval, ...(until ? { until } : {}) };
+  }
+  if (type === 'weekly') {
+    const byday = form
+      .getAll('recurrence_byday')
+      .filter((v): v is string => typeof v === 'string' && v.length > 0)
+      .filter((v): v is (typeof WEEKDAYS)[number] =>
+        (WEEKDAYS as readonly string[]).includes(v),
+      );
+    return { type: 'weekly', interval, byday, ...(until ? { until } : {}) };
+  }
+  if (type === 'monthly') {
+    const bymonthday = Number.parseInt((form.get('recurrence_bymonthday') as string) ?? '1', 10);
+    return { type: 'monthly', interval, bymonthday, ...(until ? { until } : {}) };
+  }
+  return null;
+}
+
+export function formDataToTaskPayload(form: FormData): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const setStr = (k: string) => {
+    const v = form.get(k);
+    if (typeof v === 'string' && v !== '') out[k] = v;
+  };
+  const setNullableStr = (k: string) => {
+    const v = form.get(k);
+    if (typeof v === 'string') out[k] = v === '' ? null : v;
+  };
+
+  setStr('ownerPriorityId');
+  setStr('title');
+  setNullableStr('description');
+  setNullableStr('targetDate');
+  setNullableStr('timeBlockStart');
+  setNullableStr('timeBlockEnd');
+  setStr('status');
+
+  const recurrence = formDataToRecurrence(form);
+  // Distinguish "not in form" from "explicitly cleared" — recurrence_present hidden field.
+  if (form.has('recurrence_present')) {
+    out.recurrence = recurrence;
+  }
+
+  return out;
+}
+
+export function formDataToEventPayload(form: FormData): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const setStr = (k: string) => {
+    const v = form.get(k);
+    if (typeof v === 'string' && v !== '') out[k] = v;
+  };
+  const setNullableStr = (k: string) => {
+    const v = form.get(k);
+    if (typeof v === 'string') out[k] = v === '' ? null : v;
+  };
+
+  setStr('ownerPriorityId');
+  setStr('title');
+  setNullableStr('description');
+  setStr('startTime');
+  setStr('endTime');
+
+  const cs = form.get('completionStatus');
+  if (typeof cs === 'string') {
+    out.completionStatus = cs === '' || cs === 'none' ? null : cs;
+  }
+
+  const recurrence = formDataToRecurrence(form);
+  if (form.has('recurrence_present')) {
+    out.recurrence = recurrence;
+  }
+
+  return out;
+}
+
 /**
  * Parse a form-encoded request body into the shape the priority schemas accept.
  * The form sends `iconColor` + `iconStyle` flat (no nesting), and `checkInCadence`

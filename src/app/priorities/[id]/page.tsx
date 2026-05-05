@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/auth';
 import { getPriorityById } from '@/lib/priorities';
 import { DeleteForm } from '../DeleteForm';
+import { EventsSection } from '../EventsSection';
 import { FilesSection } from '../FilesSection';
 import { MemorySection } from '../MemorySection';
 import { PriorityForm } from '../PriorityForm';
+import { TasksSection } from '../TasksSection';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -16,6 +18,11 @@ const TOAST_COPY: Record<string, { tone: 'success' | 'error'; message: string }>
   memory_deleted: { tone: 'success', message: 'Memory entry deleted.' },
   file_uploaded: { tone: 'success', message: 'File uploaded.' },
   file_deleted: { tone: 'success', message: 'File deleted.' },
+  task_saved: { tone: 'success', message: 'Task saved.' },
+  task_deleted: { tone: 'success', message: 'Task deleted.' },
+  task_completed: { tone: 'success', message: 'Task updated.' },
+  event_saved: { tone: 'success', message: 'Event saved.' },
+  event_deleted: { tone: 'success', message: 'Event deleted.' },
   validation_failed: { tone: 'error', message: "Some fields weren't valid. Check the values and try again." },
   memory_validation: { tone: 'error', message: "Memory entry didn't validate. Check the body and tags." },
   save_failed: { tone: 'error', message: "We couldn't save your changes. Try again in a moment." },
@@ -84,6 +91,18 @@ export default async function PriorityDetailPage({
             <PriorityForm mode="edit" initial={priority} submitTarget={`/api/priorities/${id}`} />
           </div>
         </details>
+
+        <TasksSection
+          userId={session.user.id}
+          priorityId={id}
+          userTimezone={session.user.timezone}
+        />
+
+        <EventsSection
+          userId={session.user.id}
+          priorityId={id}
+          userTimezone={session.user.timezone}
+        />
 
         <MemorySection userId={session.user.id} priorityId={id} />
 

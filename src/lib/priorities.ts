@@ -8,6 +8,8 @@ import {
   type PriorityIcon,
 } from '@/db/schema';
 import { newId } from '@/lib/id';
+import { cascadeSoftDeleteForPriority } from '@/lib/tasks';
+import { cascadeSoftDeleteEventsForPriority } from '@/lib/events';
 
 export type PriorityStatus = 'active' | 'paused' | 'archived';
 export type PriorityIconStyle = 'classic' | 'rounded' | 'serif' | 'script';
@@ -133,13 +135,15 @@ export async function updatePriority(
 
 export async function softDeletePriority(userId: string, id: string): Promise<boolean> {
   // Selective-cascade soft-delete per priorities-tdd.md:472-512.
-  // M6: cascades to priority_memory + priority_files (both fully soft-deleted;
-  // blobs in Vercel storage are left orphaned for v1.1 cleanup).
-  // TODO M8: extend cascade to tasks + events (selective: preserve past-completed).
+  // - Memory + files: soft-deleted in full (M6).
+  // - Tasks + events (M8): selectively preserved if completed AND past-dated;
+  //   everything else (open future, open past, recurring templates, override
+  //   rows) gets soft-deleted. Cascade helpers in tasks.ts / events.ts encode
+  //   the SQL preservation predicate.
   //
   // Sequential statements rather than db.transaction() — the Neon HTTP driver's
   // transaction API can't branch on intermediate results (it batches all queries
-  // upfront). The cascade is idempotent: if step 1 succeeds and step 2 or 3 fails,
+  // upfront). The cascade is idempotent: if step 1 succeeds and step 2 fails,
   // the user can retry and the trailing updates will simply re-target zero rows.
   const now = new Date();
 
@@ -166,6 +170,9 @@ export async function softDeletePriority(userId: string, id: string): Promise<bo
     .update(priorityFiles)
     .set({ deletedAt: now })
     .where(and(eq(priorityFiles.priorityId, id), isNull(priorityFiles.deletedAt)));
+
+  await cascadeSoftDeleteForPriority(id, now);
+  await cascadeSoftDeleteEventsForPriority(id, now);
 
   return true;
 }
