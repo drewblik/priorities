@@ -1,4 +1,5 @@
 import { requireUser } from '@/auth';
+import { ANTHROPIC_MODELS, DEFAULT_MODEL_ID } from '@/lib/anthropic-models';
 import { getSettingsView } from '@/lib/settings';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
@@ -90,6 +91,43 @@ export default async function ApiKeySettingsPage({
           </button>
         </form>
       ) : null}
+
+      <div className="border-t border-border pt-6">
+        <h2 className="text-lg font-medium">Model</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Which Claude model the planning chatbots call. Change for testing
+          (Haiku is ~10× cheaper than Sonnet, ~30× cheaper than Opus) and switch
+          back to Sonnet or Opus for real planning sessions.
+        </p>
+      </div>
+
+      <form method="post" action="/api/settings" className="space-y-3">
+        <input type="hidden" name="_redirect" value="/settings/api-key" />
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">Selected model</span>
+          <select
+            name="selectedModel"
+            defaultValue={view?.selectedModel ?? DEFAULT_MODEL_ID}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+          >
+            {ANTHROPIC_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label} — {m.blurb}
+              </option>
+            ))}
+          </select>
+          <span className="block text-xs text-muted-foreground">
+            Applies to every M12+ planning chatbot call (Quarter, Week, Day) and
+            Master Chat in M16+.
+          </span>
+        </label>
+        <button
+          type="submit"
+          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
+          Save model
+        </button>
+      </form>
     </section>
   );
 }

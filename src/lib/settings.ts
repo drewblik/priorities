@@ -1,12 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { userSettings, users, type UserSettings } from '@/db/schema';
+import { DEFAULT_MODEL_ID, type AnthropicModelId } from './anthropic-models';
 import { decryptApiKey, encryptApiKey } from './encryption';
 
 export type SettingsPatch = {
   name?: string | null;
   timezone?: string;
   anthropicApiKey?: string | null;
+  selectedModel?: AnthropicModelId;
   dailyCostCapUsd?: number;
   monthlyCostCapUsd?: number;
   planningDayOfWeek?: number;
@@ -18,6 +20,7 @@ export type SettingsView = {
   name: string | null;
   timezone: string;
   hasApiKey: boolean;
+  selectedModel: AnthropicModelId;
   dailyCostCapUsd: string;
   monthlyCostCapUsd: string;
   planningDayOfWeek: number;
@@ -26,6 +29,7 @@ export type SettingsView = {
 };
 
 const DEFAULTS = {
+  selectedModel: DEFAULT_MODEL_ID,
   dailyCostCapUsd: '5.00',
   monthlyCostCapUsd: '50.00',
   planningDayOfWeek: 0,
@@ -48,6 +52,7 @@ export async function getSettingsView(userId: string): Promise<SettingsView | nu
       name: users.name,
       timezone: users.timezone,
       anthropicApiKey: userSettings.anthropicApiKey,
+      selectedModel: userSettings.selectedModel,
       dailyCostCapUsd: userSettings.dailyCostCapUsd,
       monthlyCostCapUsd: userSettings.monthlyCostCapUsd,
       planningDayOfWeek: userSettings.planningDayOfWeek,
@@ -67,6 +72,7 @@ export async function getSettingsView(userId: string): Promise<SettingsView | nu
     name: row.name,
     timezone: row.timezone,
     hasApiKey: row.anthropicApiKey !== null && row.anthropicApiKey !== undefined,
+    selectedModel: (row.selectedModel ?? DEFAULTS.selectedModel) as AnthropicModelId,
     dailyCostCapUsd: row.dailyCostCapUsd ?? DEFAULTS.dailyCostCapUsd,
     monthlyCostCapUsd: row.monthlyCostCapUsd ?? DEFAULTS.monthlyCostCapUsd,
     planningDayOfWeek: row.planningDayOfWeek ?? DEFAULTS.planningDayOfWeek,
@@ -94,6 +100,9 @@ export async function applySettingsPatch(userId: string, patch: SettingsPatch): 
   if (patch.anthropicApiKey !== undefined) {
     settingsUpdate.anthropicApiKey =
       patch.anthropicApiKey === null ? null : encryptApiKey(patch.anthropicApiKey);
+  }
+  if (patch.selectedModel !== undefined) {
+    settingsUpdate.selectedModel = patch.selectedModel;
   }
   if (patch.dailyCostCapUsd !== undefined) {
     settingsUpdate.dailyCostCapUsd = patch.dailyCostCapUsd.toFixed(2);
