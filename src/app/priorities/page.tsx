@@ -61,6 +61,12 @@ export default async function CouncilHomePage({
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/today"
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+          >
+            Today
+          </Link>
+          <Link
             href="/settings/profile"
             className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
           >

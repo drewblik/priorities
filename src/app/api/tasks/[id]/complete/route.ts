@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentSession } from '@/auth';
-import { getTaskById, setTaskCompletion } from '@/lib/tasks';
+import { getTaskById, materializeTaskOverride, setTaskCompletion } from '@/lib/tasks';
+import { parseVirtualInstanceId } from '@/lib/recurrence';
 import { CompleteTaskSchema, isFormPost } from '@/lib/priorities-validation';
 
 export const runtime = 'nodejs';
@@ -36,6 +37,43 @@ export async function POST(req: Request, ctx: Ctx) {
     const json = await req.json().catch(() => null);
     const parsed = CompleteTaskSchema.safeParse(json);
     if (parsed.success && parsed.data.status) bodyStatus = parsed.data.status;
+  }
+
+  // Virtual id: materialize an override row first, then we're operating on
+  // a real row from there on. Status defaults to 'done' (the natural action
+  // when you tap a virtual checkbox is to mark this instance done).
+  const virtual = parseVirtualInstanceId(id);
+  if (virtual) {
+    const template = await getTaskById(session.user.id, virtual.templateId);
+    if (!template || template.recurrence === null) {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${origin(req)}${back}${sep}error=not_found`, 303);
+      }
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+    const nextStatus = bodyStatus ?? 'done';
+    const override = await materializeTaskOverride(
+      session.user.id,
+      virtual.templateId,
+      virtual.dateISO,
+      { status: nextStatus },
+    );
+    if (!override) {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${origin(req)}${back}${sep}error=save_failed`, 303);
+      }
+      return NextResponse.json({ error: 'save_failed' }, { status: 500 });
+    }
+    if (formPost) {
+      const back = redirectBack ?? `/priorities/${template.ownerPriorityId}`;
+      const sep = back.includes('?') ? '&' : '?';
+      return NextResponse.redirect(`${origin(req)}${back}${sep}task_completed=1`, 303);
+    }
+    return NextResponse.json(override);
   }
 
   const existing = await getTaskById(session.user.id, id);

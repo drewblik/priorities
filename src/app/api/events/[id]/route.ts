@@ -1,8 +1,15 @@
+import { addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 import { NextResponse } from 'next/server';
 import { fromZonedTime } from 'date-fns-tz';
 import type { ZodIssue } from 'zod';
 import { getCurrentSession } from '@/auth';
-import { getEventById, softDeleteEvent, updateEvent } from '@/lib/events';
+import {
+  getEventById,
+  materializeEventOverride,
+  softDeleteEvent,
+  updateEvent,
+} from '@/lib/events';
+import { parseVirtualInstanceId } from '@/lib/recurrence';
 import {
   UpdateEventSchema,
   formDataToEventPayload,
@@ -44,6 +51,86 @@ async function handle(req: Request, ctx: Ctx) {
     const r = form.get('_redirect');
     if (typeof r === 'string' && r.startsWith('/')) redirectBack = r;
     formPayload = formDataToEventPayload(form);
+  }
+
+  // Virtual id: a recurrence engine synthetic instance, not a real row.
+  // PATCH materializes an override; DELETE is a no-op (UI hides Delete for
+  // virtual rows, so this is just a defensive 404).
+  const virtual = parseVirtualInstanceId(id);
+  if (virtual) {
+    if (req.method === 'DELETE' || action === 'delete') {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${origin(req)}${back}${sep}error=not_found`, 303);
+      }
+      return NextResponse.json({ error: 'cannot_delete_virtual' }, { status: 400 });
+    }
+
+    const payload = formPost ? formPayload : await req.json().catch(() => null);
+    const parsed = UpdateEventSchema.safeParse(payload);
+    if (!parsed.success) {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        const issue = encodeURIComponent(firstIssueMsg(parsed.error.issues));
+        return NextResponse.redirect(
+          `${origin(req)}${back}${sep}error=validation_failed&validation_issue=${issue}`,
+          303,
+        );
+      }
+      return NextResponse.json(
+        { error: 'validation_failed', issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+
+    const template = await getEventById(session.user.id, virtual.templateId);
+    if (!template || template.recurrence === null) {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${origin(req)}${back}${sep}error=not_found`, 303);
+      }
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+
+    // Re-derive the override's start/end by shifting the template's
+    // first-occurrence times to the virtual instance's date.
+    const templateStartDate = parseISO(template.startTime.toISOString().slice(0, 10));
+    const queryDate = parseISO(virtual.dateISO);
+    const dayDelta = differenceInCalendarDays(queryDate, templateStartDate);
+    const startTime = addDays(template.startTime, dayDelta);
+    const endTime = addDays(template.endTime, dayDelta);
+
+    const override = await materializeEventOverride(
+      session.user.id,
+      virtual.templateId,
+      startTime,
+      endTime,
+      {
+        completionStatus:
+          parsed.data.completionStatus !== undefined
+            ? parsed.data.completionStatus
+            : null,
+        title: parsed.data.title,
+        description: parsed.data.description,
+      },
+    );
+    if (!override) {
+      if (formPost) {
+        const back = redirectBack ?? '/today';
+        const sep = back.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${origin(req)}${back}${sep}error=save_failed`, 303);
+      }
+      return NextResponse.json({ error: 'save_failed' }, { status: 500 });
+    }
+    if (formPost) {
+      const back = redirectBack ?? `/priorities/${template.ownerPriorityId}`;
+      const sep = back.includes('?') ? '&' : '?';
+      return NextResponse.redirect(`${origin(req)}${back}${sep}event_saved=1`, 303);
+    }
+    return NextResponse.json(override);
   }
 
   if (req.method === 'DELETE' || action === 'delete') {

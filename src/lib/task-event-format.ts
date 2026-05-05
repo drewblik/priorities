@@ -41,6 +41,13 @@ export function eventScheduleLine(event: Event, tz: string): string {
   return `${day} · ${start}–${end}`;
 }
 
+/** Time range without the date prefix; used in Daily View where the date is in the page header. */
+export function timeRangeOnly(start: Date, end: Date, tz: string): string {
+  const s = formatInTimeZone(start, tz, 'h:mm a');
+  const e = formatInTimeZone(end, tz, 'h:mm a');
+  return `${s}–${e}`;
+}
+
 export function recurrenceLabel(rec: Recurrence | null): string | null {
   if (!rec) return null;
   let core: string;
