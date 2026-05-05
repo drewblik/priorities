@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import {
   priorities,
@@ -183,18 +183,24 @@ export async function reorderPriorities(
 ): Promise<void> {
   if (idsInOrder.length === 0) return;
 
-  // Single UPDATE with a CASE expression so this is one round-trip to Neon.
-  const cases = idsInOrder.map((id, i) => sql`WHEN ${id} THEN ${i + 1}`);
-  const caseExpr = sql`CASE ${priorities.id} ${sql.join(cases, sql` `)} END`;
-
-  await db
-    .update(priorities)
-    .set({ position: caseExpr, updatedAt: new Date() })
-    .where(
-      and(
-        eq(priorities.userId, userId),
-        inArray(priorities.id, idsInOrder),
-        isNull(priorities.deletedAt),
-      ),
-    );
+  // Sequential UPDATEs — one per priority. Slightly more round-trips than
+  // the previous CASE-WHEN one-shot, but robust to Neon HTTP driver type
+  // inference (the CASE expression unified to text, then Postgres refused
+  // to assign text into the integer `position` column). At v1's personal
+  // scale (≤ a couple dozen priorities) the latency cost is negligible.
+  const now = new Date();
+  for (let i = 0; i < idsInOrder.length; i++) {
+    const id = idsInOrder[i];
+    if (!id) continue;
+    await db
+      .update(priorities)
+      .set({ position: i + 1, updatedAt: now })
+      .where(
+        and(
+          eq(priorities.id, id),
+          eq(priorities.userId, userId),
+          isNull(priorities.deletedAt),
+        ),
+      );
+  }
 }
