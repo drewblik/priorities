@@ -21,7 +21,12 @@ export async function POST(req: Request) {
   try {
     await reorderPriorities(session.user.id, parsed.data.ids);
   } catch (err) {
-    console.error('reorderPriorities failed:', err instanceof Error ? err.message : err);
+    console.error(
+      'reorderPriorities failed:',
+      err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : err,
+      'ids:',
+      parsed.data.ids,
+    );
     return NextResponse.json({ error: 'save_failed' }, { status: 500 });
   }
 

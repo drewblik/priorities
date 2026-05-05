@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { tasks, type Recurrence, type Task } from '@/db/schema';
 import { newId } from '@/lib/id';
@@ -43,7 +43,7 @@ export async function getTasksForPriority(
         isNull(tasks.deletedAt),
       ),
     )
-    .orderBy(asc(sql`${tasks.targetDate} NULLS LAST`), desc(tasks.createdAt));
+    .orderBy(sql`${tasks.targetDate} ASC NULLS LAST`, desc(tasks.createdAt));
 }
 
 export async function getTaskById(userId: string, taskId: string): Promise<Task | null> {
