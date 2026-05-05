@@ -40,7 +40,9 @@ export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, i
       ) : null}
 
       <label className="block space-y-1">
-        <span className="text-sm font-medium">Title</span>
+        <span className="text-sm font-medium">
+          Title <span className="text-red-700">*</span>
+        </span>
         <input
           type="text"
           name="title"
@@ -64,7 +66,9 @@ export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, i
 
       <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-sm font-medium">Start time</span>
+          <span className="text-sm font-medium">
+            Start time <span className="text-red-700">*</span>
+          </span>
           <input
             type="datetime-local"
             name="startTime"
@@ -74,7 +78,9 @@ export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, i
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">End time</span>
+          <span className="text-sm font-medium">
+            End time <span className="text-red-700">*</span>
+          </span>
           <input
             type="datetime-local"
             name="endTime"

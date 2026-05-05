@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fromZonedTime } from 'date-fns-tz';
+import type { ZodIssue } from 'zod';
 import { getCurrentSession } from '@/auth';
 import { getEventById, softDeleteEvent, updateEvent } from '@/lib/events';
 import {
@@ -12,6 +13,13 @@ export const runtime = 'nodejs';
 
 function origin(req: Request): string {
   return new URL(req.url).origin;
+}
+
+function firstIssueMsg(issues: ZodIssue[]): string {
+  const first = issues[0];
+  if (!first) return 'Invalid input.';
+  const path = first.path.length > 0 ? first.path.join('.') : '';
+  return path ? `${path}: ${first.message}` : first.message;
 }
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -67,7 +75,11 @@ async function handle(req: Request, ctx: Ctx) {
     if (formPost) {
       const back = redirectBack ?? '/priorities';
       const sep = back.includes('?') ? '&' : '?';
-      return NextResponse.redirect(`${origin(req)}${back}${sep}error=validation_failed`, 303);
+      const issue = encodeURIComponent(firstIssueMsg(parsed.error.issues));
+      return NextResponse.redirect(
+        `${origin(req)}${back}${sep}error=validation_failed&validation_issue=${issue}`,
+        303,
+      );
     }
     return NextResponse.json(
       { error: 'validation_failed', issues: parsed.error.issues },
@@ -98,7 +110,11 @@ async function handle(req: Request, ctx: Ctx) {
     if (formPost) {
       const back = redirectBack ?? '/priorities';
       const sep = back.includes('?') ? '&' : '?';
-      return NextResponse.redirect(`${origin(req)}${back}${sep}error=validation_failed`, 303);
+      const issue = encodeURIComponent('Event end time must be after start time');
+      return NextResponse.redirect(
+        `${origin(req)}${back}${sep}error=validation_failed&validation_issue=${issue}`,
+        303,
+      );
     }
     return NextResponse.json({ error: 'end_must_follow_start' }, { status: 400 });
   }

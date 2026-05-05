@@ -55,7 +55,9 @@ export default async function PriorityDetailPage({
       if (sp[key] === '1') return TOAST_COPY[key];
     }
     if (typeof sp.error === 'string') {
-      return TOAST_COPY[sp.error] ?? { tone: 'error' as const, message: 'Something went wrong.' };
+      const base = TOAST_COPY[sp.error] ?? { tone: 'error' as const, message: 'Something went wrong.' };
+      const detail = typeof sp.validation_issue === 'string' ? sp.validation_issue : '';
+      return detail ? { tone: base.tone, message: `${base.message} (${detail})` } : base;
     }
     return null;
   })();

@@ -42,7 +42,9 @@ export function TaskForm({ mode, ownerPriorityId, redirectBack, submitTarget, in
       ) : null}
 
       <label className="block space-y-1">
-        <span className="text-sm font-medium">Title</span>
+        <span className="text-sm font-medium">
+          Title <span className="text-red-700">*</span>
+        </span>
         <input
           type="text"
           name="title"
@@ -74,25 +76,31 @@ export function TaskForm({ mode, ownerPriorityId, redirectBack, submitTarget, in
         />
       </label>
 
-      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Time block start (optional)</span>
-          <input
-            type="datetime-local"
-            name="timeBlockStart"
-            defaultValue={initial?.timeBlockStart}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Time block end</span>
-          <input
-            type="datetime-local"
-            name="timeBlockEnd"
-            defaultValue={initial?.timeBlockEnd}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
-          />
-        </label>
+      <fieldset className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Time block (optional). Leave both blank, or set both — the end time must come
+          after the start time.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">Start</span>
+            <input
+              type="datetime-local"
+              name="timeBlockStart"
+              defaultValue={initial?.timeBlockStart}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">End</span>
+            <input
+              type="datetime-local"
+              name="timeBlockEnd"
+              defaultValue={initial?.timeBlockEnd}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+            />
+          </label>
+        </div>
       </fieldset>
 
       {mode === 'edit' && !isOverride ? (

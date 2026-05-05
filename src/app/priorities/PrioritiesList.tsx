@@ -50,11 +50,21 @@ export function PrioritiesList({ initial }: Props) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ids: next.map((p) => p.id) }),
       });
-      if (!res.ok) throw new Error(`reorder ${res.status}`);
+      if (!res.ok) {
+        let detail = '';
+        try {
+          const body = (await res.json()) as { error?: string; detail?: string };
+          detail = body.detail ?? body.error ?? '';
+        } catch {
+          // body wasn't JSON; ignore.
+        }
+        throw new Error(detail ? `${res.status}: ${detail}` : `reorder ${res.status}`);
+      }
     } catch (err) {
       console.error(err);
       setItems(previous);
-      setError("Couldn't save the new order. Try again.");
+      const msg = err instanceof Error ? err.message : 'unknown error';
+      setError(`Couldn't save the new order. (${msg}) Try again.`);
     }
   }
 

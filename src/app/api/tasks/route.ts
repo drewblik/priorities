@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fromZonedTime } from 'date-fns-tz';
+import type { ZodIssue } from 'zod';
 import { getCurrentSession } from '@/auth';
 import { createTask } from '@/lib/tasks';
 import {
@@ -17,6 +18,13 @@ function origin(req: Request): string {
 function readRedirect(form: FormData): string | null {
   const r = form.get('_redirect');
   return typeof r === 'string' && r.startsWith('/') ? r : null;
+}
+
+function firstIssueMsg(issues: ZodIssue[]): string {
+  const first = issues[0];
+  if (!first) return 'Invalid input.';
+  const path = first.path.length > 0 ? first.path.join('.') : '';
+  return path ? `${path}: ${first.message}` : first.message;
 }
 
 export async function POST(req: Request) {
@@ -43,8 +51,9 @@ export async function POST(req: Request) {
     if (formPost) {
       const back = redirectBack ?? '/priorities';
       const sep = back.includes('?') ? '&' : '?';
+      const issue = encodeURIComponent(firstIssueMsg(parsed.error.issues));
       return NextResponse.redirect(
-        `${origin(req)}${back}${sep}error=validation_failed`,
+        `${origin(req)}${back}${sep}error=validation_failed&validation_issue=${issue}`,
         303,
       );
     }
@@ -66,7 +75,11 @@ export async function POST(req: Request) {
     if (formPost) {
       const back = redirectBack ?? '/priorities';
       const sep = back.includes('?') ? '&' : '?';
-      return NextResponse.redirect(`${origin(req)}${back}${sep}error=validation_failed`, 303);
+      const issue = encodeURIComponent('Time block end must be after start');
+      return NextResponse.redirect(
+        `${origin(req)}${back}${sep}error=validation_failed&validation_issue=${issue}`,
+        303,
+      );
     }
     return NextResponse.json({ error: 'time_block_end_must_follow_start' }, { status: 400 });
   }
