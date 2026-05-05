@@ -141,9 +141,23 @@ export default async function CalendarSettingsPage({
       </details>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Your feeds ({feeds.length})
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Your feeds ({feeds.length})
+          </h3>
+          {feeds.length > 0 ? (
+            <form method="post" action="/api/calendar-feeds/sync-all">
+              <input type="hidden" name="_redirect" value="/settings/calendar" />
+              <button
+                type="submit"
+                className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
+                title="Re-fetch every feed now"
+              >
+                ↻ Sync all
+              </button>
+            </form>
+          ) : null}
+        </div>
         {feeds.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
             No feeds yet. Add one above.

@@ -14,6 +14,7 @@ const TOAST_COPY: Record<string, { tone: 'success' | 'error'; message: string }>
   task_completed: { tone: 'success', message: 'Task updated.' },
   event_saved: { tone: 'success', message: 'Event saved.' },
   event_deleted: { tone: 'success', message: 'Event deleted.' },
+  feeds_synced: { tone: 'success', message: 'Calendar feeds synced.' },
   validation_failed: {
     tone: 'error',
     message: "Some fields weren't valid. Check the values and try again.",
@@ -22,6 +23,7 @@ const TOAST_COPY: Record<string, { tone: 'success' | 'error'; message: string }>
     tone: 'error',
     message: "We couldn't save your changes. Try again in a moment.",
   },
+  sync_failed: { tone: 'error', message: 'Calendar sync failed.' },
   not_found: { tone: 'error', message: 'That item could not be found.' },
 };
 
@@ -86,6 +88,16 @@ export default async function TodayPage({
           >
             Settings
           </Link>
+          <form method="post" action="/api/calendar-feeds/sync-all">
+            <input type="hidden" name="_redirect" value={redirectBack} />
+            <button
+              type="submit"
+              className="text-sm text-muted-foreground hover:text-foreground"
+              title="Refresh all calendar feeds"
+            >
+              ↻ Sync calendars
+            </button>
+          </form>
         </div>
       </header>
 
