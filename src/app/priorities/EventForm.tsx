@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import type { Recurrence } from '@/db/schema';
 import { RecurrenceFields } from './RecurrenceFields';
 
@@ -27,6 +28,8 @@ type Props = {
 
 export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, initial }: Props) {
   const isOverride = initial?.isOverride === true;
+  const [startTime, setStartTime] = useState(initial?.startTime ?? '');
+  const [endTime, setEndTime] = useState(initial?.endTime ?? '');
   return (
     <form method="post" action={submitTarget} className="space-y-4">
       <input type="hidden" name="ownerPriorityId" value={ownerPriorityId} />
@@ -73,7 +76,12 @@ export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, i
             type="datetime-local"
             name="startTime"
             required
-            defaultValue={initial?.startTime}
+            value={startTime}
+            onChange={(e) => {
+              const v = e.target.value;
+              setStartTime(v);
+              if (endTime && v && endTime < v) setEndTime(v);
+            }}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
           />
         </label>
@@ -85,7 +93,9 @@ export function EventForm({ mode, ownerPriorityId, redirectBack, submitTarget, i
             type="datetime-local"
             name="endTime"
             required
-            defaultValue={initial?.endTime}
+            value={endTime}
+            min={startTime || undefined}
+            onChange={(e) => setEndTime(e.target.value)}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
           />
         </label>

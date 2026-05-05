@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import type { Recurrence } from '@/db/schema';
 import { RecurrenceFields } from './RecurrenceFields';
 
@@ -28,6 +29,8 @@ type Props = {
 
 export function TaskForm({ mode, ownerPriorityId, redirectBack, submitTarget, initial }: Props) {
   const isOverride = initial?.isOverride === true;
+  const [tbStart, setTbStart] = useState(initial?.timeBlockStart ?? '');
+  const [tbEnd, setTbEnd] = useState(initial?.timeBlockEnd ?? '');
 
   return (
     <form method="post" action={submitTarget} className="space-y-4">
@@ -87,7 +90,12 @@ export function TaskForm({ mode, ownerPriorityId, redirectBack, submitTarget, in
             <input
               type="datetime-local"
               name="timeBlockStart"
-              defaultValue={initial?.timeBlockStart}
+              value={tbStart}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTbStart(v);
+                if (tbEnd && v && tbEnd < v) setTbEnd(v);
+              }}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
             />
           </label>
@@ -96,7 +104,9 @@ export function TaskForm({ mode, ownerPriorityId, redirectBack, submitTarget, in
             <input
               type="datetime-local"
               name="timeBlockEnd"
-              defaultValue={initial?.timeBlockEnd}
+              value={tbEnd}
+              min={tbStart || undefined}
+              onChange={(e) => setTbEnd(e.target.value)}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
             />
           </label>
