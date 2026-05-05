@@ -44,25 +44,41 @@ export function DailyTimeline({ items, userTimezone, redirectBack }: Props) {
               </li>
             );
           }
-          const e = item.event;
+          if (item.kind === 'event') {
+            const e = item.event;
+            return (
+              <li key={e.id}>
+                <DailyTimelineRow
+                  kind="event"
+                  id={e.id}
+                  ownerPriorityId={e.ownerPriorityId}
+                  title={e.title}
+                  description={e.description}
+                  timeRange={timeRangeOnly(e.startTime, e.endTime, userTimezone)}
+                  recurrenceLabel={recurrenceLabel(e.recurrence)}
+                  isVirtual={e.kind === 'virtual'}
+                  completionStatus={
+                    (e.completionStatus as 'attended' | 'missed' | null) ?? null
+                  }
+                  priorityName={item.priority.name}
+                  priorityColor={item.priority.icon.color}
+                  priorityPaused={item.priority.status === 'paused'}
+                  redirectBack={redirectBack}
+                />
+              </li>
+            );
+          }
+          const fe = item.feedEvent;
           return (
-            <li key={e.id}>
+            <li key={fe.id}>
               <DailyTimelineRow
-                kind="event"
-                id={e.id}
-                ownerPriorityId={e.ownerPriorityId}
-                title={e.title}
-                description={e.description}
-                timeRange={timeRangeOnly(e.startTime, e.endTime, userTimezone)}
-                recurrenceLabel={recurrenceLabel(e.recurrence)}
-                isVirtual={e.kind === 'virtual'}
-                completionStatus={
-                  (e.completionStatus as 'attended' | 'missed' | null) ?? null
-                }
-                priorityName={item.priority.name}
-                priorityColor={item.priority.icon.color}
-                priorityPaused={item.priority.status === 'paused'}
-                redirectBack={redirectBack}
+                kind="feedEvent"
+                id={fe.id}
+                title={fe.title}
+                description={fe.description}
+                timeRange={timeRangeOnly(fe.startTime, fe.endTime, userTimezone)}
+                sourceName={item.sourceName}
+                isRemoved={fe.removedFromSourceAt !== null}
               />
             </li>
           );

@@ -302,3 +302,69 @@ export type Task = typeof tasks.$inferSelect;
 export type TaskInsert = typeof tasks.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type EventInsert = typeof events.$inferInsert;
+
+// =============================================================================
+// M10: calendar_feed_configs + calendar_feed_events (read-only .ics ingestion)
+//
+// Configs: per-user feed subscriptions (encrypted feed_url at rest).
+// Events: synced rows from each feed; HARD-deleted (no soft-delete column —
+// TDD §72 reserves hard delete for purged-tables) and reconciled via
+// `removed_from_source_at` for past-event preservation.
+// =============================================================================
+
+export const calendarFeedConfigs = pgTable(
+  'calendar_feed_configs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(), // google|outlook|other
+    name: text('name').notNull(),
+    feedUrl: text('feed_url').notNull(), // AES-256-GCM-encrypted envelope (base64)
+    syncCadenceMin: integer('sync_cadence_min').notNull().default(30),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    lastSyncError: text('last_sync_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_calendar_configs_user')
+      .on(table.userId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_calendar_configs_due')
+      .on(table.lastSyncedAt)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+export const calendarFeedEvents = pgTable(
+  'calendar_feed_events',
+  {
+    id: text('id').primaryKey(),
+    sourceFeedId: text('source_feed_id')
+      .notNull()
+      .references(() => calendarFeedConfigs.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    externalId: text('external_id').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    startTime: timestamp('start_time', { withTimezone: true }).notNull(),
+    endTime: timestamp('end_time', { withTimezone: true }).notNull(),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
+    removedFromSourceAt: timestamp('removed_from_source_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('idx_cfe_unique').on(table.sourceFeedId, table.externalId),
+    index('idx_cfe_user_start').on(table.userId, table.startTime),
+    index('idx_cfe_user_active')
+      .on(table.userId, table.startTime)
+      .where(sql`${table.removedFromSourceAt} IS NULL`),
+  ],
+);
+
+export type CalendarFeedConfig = typeof calendarFeedConfigs.$inferSelect;
+export type CalendarFeedEvent = typeof calendarFeedEvents.$inferSelect;

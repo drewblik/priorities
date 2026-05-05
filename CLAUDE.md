@@ -52,6 +52,7 @@ Files written so far:
 - `drizzle/migrations/0003_priority_memory_and_files.sql` — M6 (priority_memory, priority_files)
 - `drizzle/migrations/0004_quarters.sql` — M7 (quarters)
 - `drizzle/migrations/0005_tasks_and_events.sql` — M8 (tasks, events)
+- `drizzle/migrations/0006_calendar_feeds.sql` — M10 (calendar_feed_configs, calendar_feed_events)
 
 ## Build-order deviations from TDD
 

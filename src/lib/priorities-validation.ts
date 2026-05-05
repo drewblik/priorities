@@ -359,6 +359,58 @@ export function formDataToEventPayload(form: FormData): Record<string, unknown> 
   return out;
 }
 
+// =============================================================================
+// M10: calendar feed validation
+// =============================================================================
+
+export const FEED_SOURCES = ['google', 'outlook', 'other'] as const;
+
+const FeedNameField = z.string().trim().min(1).max(120);
+const FeedUrlField = z.string().trim().url().max(2000);
+const FeedCadenceField = z.number().int().min(5).max(1440);
+
+export const CreateCalendarFeedSchema = z.object({
+  name: FeedNameField,
+  source: z.enum(FEED_SOURCES),
+  feedUrl: FeedUrlField,
+  syncCadenceMin: FeedCadenceField.optional(),
+});
+
+export const UpdateCalendarFeedSchema = z
+  .object({
+    name: FeedNameField.optional(),
+    source: z.enum(FEED_SOURCES).optional(),
+    feedUrl: FeedUrlField.optional(),
+    syncCadenceMin: FeedCadenceField.optional(),
+  })
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.source !== undefined ||
+      v.feedUrl !== undefined ||
+      v.syncCadenceMin !== undefined,
+    { message: 'at least one field required' },
+  );
+
+export type CreateCalendarFeedBody = z.infer<typeof CreateCalendarFeedSchema>;
+export type UpdateCalendarFeedBody = z.infer<typeof UpdateCalendarFeedSchema>;
+
+export function formDataToCalendarFeedPayload(form: FormData): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const setStr = (k: string) => {
+    const v = form.get(k);
+    if (typeof v === 'string' && v !== '') out[k] = v;
+  };
+  setStr('name');
+  setStr('source');
+  setStr('feedUrl');
+  const cadence = form.get('syncCadenceMin');
+  if (typeof cadence === 'string' && cadence !== '') {
+    out.syncCadenceMin = Number.parseInt(cadence, 10);
+  }
+  return out;
+}
+
 /**
  * Parse a form-encoded request body into the shape the priority schemas accept.
  * The form sends `iconColor` + `iconStyle` flat (no nesting), and `checkInCadence`

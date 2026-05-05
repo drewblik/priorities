@@ -2,11 +2,6 @@ import { redirect } from 'next/navigation';
 import { requireUser } from '@/auth';
 
 const PLACEHOLDERS: Record<string, { label: string; comingIn: string; description: string }> = {
-  calendar: {
-    label: 'Calendar',
-    comingIn: 'M10',
-    description: 'Subscribe to .ics calendar feeds and surface events on your Daily View.',
-  },
   planning: {
     label: 'Planning',
     comingIn: 'M14',

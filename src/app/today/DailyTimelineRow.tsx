@@ -34,7 +34,17 @@ export type DailyEventRowProps = {
   redirectBack: string;
 };
 
-type Props = DailyTaskRowProps | DailyEventRowProps;
+export type DailyFeedEventRowProps = {
+  kind: 'feedEvent';
+  id: string;
+  title: string;
+  description: string | null;
+  timeRange: string;
+  sourceName: string;
+  isRemoved: boolean;
+};
+
+type Props = DailyTaskRowProps | DailyEventRowProps | DailyFeedEventRowProps;
 
 const EVENT_STATUS_OPTIONS: { value: 'none' | 'attended' | 'missed'; label: string }[] = [
   { value: 'none', label: 'Not yet' },
@@ -44,7 +54,8 @@ const EVENT_STATUS_OPTIONS: { value: 'none' | 'attended' | 'missed'; label: stri
 
 export function DailyTimelineRow(props: Props) {
   if (props.kind === 'task') return <TaskBody {...props} />;
-  return <EventBody {...props} />;
+  if (props.kind === 'event') return <EventBody {...props} />;
+  return <FeedEventBody {...props} />;
 }
 
 function HeaderLine({
@@ -153,6 +164,33 @@ function TaskBody(props: DailyTaskRowProps) {
           )}
         </div>
       </div>
+    </article>
+  );
+}
+
+function FeedEventBody(props: DailyFeedEventRowProps) {
+  return (
+    <article className="space-y-1 rounded-md border border-border border-l-4 border-l-muted-foreground/40 bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="rounded-full border border-border bg-muted px-2 py-0.5 uppercase tracking-wide">
+          Calendar
+        </span>
+        <span>· {props.timeRange}</span>
+        {props.isRemoved ? (
+          <span className="text-amber-700">· removed from source</span>
+        ) : null}
+      </div>
+      <h4
+        className={`truncate text-sm font-medium ${
+          props.isRemoved ? 'italic text-muted-foreground' : ''
+        }`}
+      >
+        {props.title}
+      </h4>
+      <p className="text-xs text-muted-foreground">From: {props.sourceName}</p>
+      {props.description ? (
+        <p className="whitespace-pre-wrap text-xs text-foreground/80">{props.description}</p>
+      ) : null}
     </article>
   );
 }

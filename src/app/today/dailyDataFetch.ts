@@ -1,12 +1,14 @@
+import { getCalendarFeedEventsForRange, getFeedsForUser } from '@/lib/calendar-feeds';
 import { getEventsForDateRange } from '@/lib/events';
 import { getPrioritiesForUser } from '@/lib/priorities';
 import { getTasksForDate } from '@/lib/tasks';
-import type { Priority } from '@/db/schema';
+import type { CalendarFeedEvent, Priority } from '@/db/schema';
 import type { DisplayedEvent, DisplayedTask } from '@/lib/recurrence';
 
 export type TimelineItem =
   | { kind: 'task'; task: DisplayedTask; priority: Priority; sortKey: number }
-  | { kind: 'event'; event: DisplayedEvent; priority: Priority; sortKey: number };
+  | { kind: 'event'; event: DisplayedEvent; priority: Priority; sortKey: number }
+  | { kind: 'feedEvent'; feedEvent: CalendarFeedEvent; sourceName: string; sortKey: number };
 
 export type DailyData = {
   timelineItems: TimelineItem[];
@@ -27,11 +29,16 @@ export async function fetchDailyData(
   dateISO: string,
   userTimezone: string,
 ): Promise<DailyData> {
-  const [tasks, events, priorities] = await Promise.all([
+  const [tasks, events, priorities, feedEvents, feeds] = await Promise.all([
     getTasksForDate(userId, dateISO),
     getEventsForDateRange(userId, dateISO, dateISO, userTimezone),
     getPrioritiesForUser(userId, { includeArchived: true }),
+    getCalendarFeedEventsForRange(userId, dateISO, dateISO, userTimezone),
+    getFeedsForUser(userId),
   ]);
+
+  const feedNameById = new Map<string, string>();
+  for (const f of feeds) feedNameById.set(f.id, f.name);
 
   const priorityById = new Map<string, Priority>();
   for (const p of priorities) priorityById.set(p.id, p);
@@ -75,6 +82,16 @@ export async function fetchDailyData(
       event: e,
       priority,
       sortKey: e.startTime.getTime(),
+    });
+  }
+
+  for (const fe of feedEvents) {
+    const sourceName = feedNameById.get(fe.sourceFeedId) ?? '(unknown feed)';
+    timelineItems.push({
+      kind: 'feedEvent',
+      feedEvent: fe,
+      sourceName,
+      sortKey: fe.startTime.getTime(),
     });
   }
 
