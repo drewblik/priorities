@@ -8,7 +8,10 @@ import {
   numeric,
   time,
   jsonb,
+  boolean,
+  date,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // =============================================================================
 // M2: auth tables
@@ -159,3 +162,34 @@ export const priorityFiles = pgTable(
 
 export type PriorityMemory = typeof priorityMemory.$inferSelect;
 export type PriorityFile = typeof priorityFiles.$inferSelect;
+
+// =============================================================================
+// M7: quarters (council operates on 13-week quarters; ensureCurrentQuarter
+// rolls users into a fresh quarter on first activity past the prior end_date)
+// =============================================================================
+
+export const quarters = pgTable(
+  'quarters',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    quarterLabel: text('quarter_label').notNull(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    status: text('status').notNull().default('active'), // active|closed
+    isPartial: boolean('is_partial').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('idx_quarters_user_active')
+      .on(table.userId)
+      .where(sql`${table.status} = 'active' AND ${table.deletedAt} IS NULL`),
+    index('idx_quarters_user_dates').on(table.userId, table.startDate),
+  ],
+);
+
+export type Quarter = typeof quarters.$inferSelect;

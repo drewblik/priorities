@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { getPrioritiesForUser } from '@/lib/priorities';
+import {
+  currentDateInTz,
+  ensureCurrentQuarter,
+  weekNumber,
+  weeksInQuarter,
+} from '@/lib/quarters';
 import { PrioritiesList } from './PrioritiesList';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
@@ -20,7 +26,17 @@ export default async function CouncilHomePage({
   const session = await requireUser();
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const all = await getPrioritiesForUser(session.user.id, { includeArchived: showArchived });
+  const [all, quarter] = await Promise.all([
+    getPrioritiesForUser(session.user.id, { includeArchived: showArchived }),
+    ensureCurrentQuarter(session.user.id, session.user.timezone),
+  ]);
+
+  const todayISO = currentDateInTz(session.user.timezone);
+  const totalWeeks = weeksInQuarter(quarter.startDate, quarter.endDate);
+  const week = weekNumber(todayISO, quarter.startDate, totalWeeks);
+  const quarterHeader = `${quarter.quarterLabel} · week ${week} of ${totalWeeks}${
+    quarter.isPartial ? ' (partial)' : ''
+  }`;
 
   // Toast on success/error query params from form-post redirects.
   const toast = (() => {
@@ -38,6 +54,7 @@ export default async function CouncilHomePage({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Council</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{quarterHeader}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Signed in as <span className="text-foreground">{session.user.email}</span>
           </p>
