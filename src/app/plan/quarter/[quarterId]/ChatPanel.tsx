@@ -51,12 +51,17 @@ export function ChatPanel({ initial, quarterId }: Props) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);
 
-  // Reset state when the active priority changes (after Finish & Next).
+  // Reset state ONLY when navigating to a different session (e.g., Finish &
+  // Next moved to a new priority). NOT on every initialMessages update —
+  // server-component refreshes (e.g., from a router.refresh after tool_result)
+  // would otherwise wipe the in-flight assistant placeholder mid-stream and
+  // drop subsequent text_delta events.
   useEffect(() => {
     setMessages(initial.initialMessages.map((m) => ({ role: m.role, text: m.text, tools: [] })));
     setSignaledDone(false);
     setBanner(null);
-  }, [initial.sessionId, initial.initialMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial.sessionId]);
 
   if (!initial.currentPriority || !initial.sessionId) {
     return (
