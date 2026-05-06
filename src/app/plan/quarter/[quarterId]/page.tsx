@@ -94,7 +94,11 @@ export default async function QuarterPlanPage({
         </Link>
       </header>
 
-      <QueuePanel priorities={queue} />
+      <QueuePanel
+        priorities={queue}
+        currentPriorityId={currentPriority?.id ?? null}
+        donePriorityIds={closedPriorityIds}
+      />
 
       <ChatPanel initial={initial} quarterId={quarterId} />
 

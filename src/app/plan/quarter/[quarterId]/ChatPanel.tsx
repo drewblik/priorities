@@ -306,9 +306,18 @@ export function ChatPanel({ initial, quarterId }: Props) {
         {signaledDone ? (
           <div className="space-y-2 rounded-md border border-green-600/30 bg-green-600/5 p-3">
             <p className="text-sm text-green-700">
-              {priority.name} planned. Move to the next Priority in the queue?
+              {priority.name} has signaled it's done planning. You can keep
+              going if there's more to discuss, or move to the next Priority.
             </p>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSignaledDone(false)}
+                disabled={streaming}
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Keep planning
+              </button>
               <button
                 type="button"
                 onClick={() => finishOrSkip('finish')}

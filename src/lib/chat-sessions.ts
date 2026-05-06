@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { chatSessions, type ChatSession } from '@/db/schema';
 import { newId } from '@/lib/id';
@@ -54,8 +54,10 @@ export async function getOrCreateSession(input: CreateSessionInput): Promise<Cha
   return created;
 }
 
-/** Find a closed session for a (user, type, contextRef, priorityId) tuple,
- *  if any. Used to compute queue state ("which priorities are done"). */
+/** Find CLOSED sessions (closed_at IS NOT NULL) for a (user, type,
+ *  contextRef) tuple. Used to compute queue state — "which priorities
+ *  are done". An open session for the current priority is intentionally
+ *  excluded. */
 export async function getClosedSessions(
   userId: string,
   sessionType: SessionType,
@@ -69,6 +71,7 @@ export async function getClosedSessions(
         eq(chatSessions.userId, userId),
         eq(chatSessions.sessionType, sessionType),
         eq(chatSessions.contextRef, contextRef),
+        isNotNull(chatSessions.closedAt),
         isNull(chatSessions.deletedAt),
       ),
     );
