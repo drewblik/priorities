@@ -55,6 +55,7 @@ Files written so far:
 - `drizzle/migrations/0006_calendar_feeds.sql` — M10 (calendar_feed_configs, calendar_feed_events)
 - `drizzle/migrations/0007_calendar_feed_events_all_day.sql` — M10 hotfix (all_day flag)
 - `drizzle/migrations/0008_user_settings_selected_model.sql` — M11 follow-up (selected_model)
+- `drizzle/migrations/0009_chat_planning_locks.sql` — M12 (chat_sessions, chat_messages, generation_locks, quarter_week_focus)
 
 ## Build-order deviations from TDD
 

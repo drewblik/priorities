@@ -10,6 +10,7 @@ import {
   jsonb,
   boolean,
   date,
+  primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -370,3 +371,110 @@ export const calendarFeedEvents = pgTable(
 
 export type CalendarFeedConfig = typeof calendarFeedConfigs.$inferSelect;
 export type CalendarFeedEvent = typeof calendarFeedEvents.$inferSelect;
+
+// =============================================================================
+// M12: chat_sessions + generation_locks + quarter_week_focus
+//
+// chat_sessions: per-Priority planning conversation rows. Tracks cumulative
+//   cost per session. session_type='quarter'|'weekly'|'daily'|'master'|...
+//   priority_id is nullable (Master Chat sessions have no single priority).
+//   chat_messages persistence is deferred to M16 — for M12, the message
+//   thread is ephemeral / client-state.
+//
+// generation_locks: single-flight protection. PRIMARY KEY (user_id, lock_key).
+//   Insert ON CONFLICT DO NOTHING; stale locks past expires_at get overwritten.
+//
+// quarter_week_focus: rows the Quarter Planning chatbot writes via the
+//   set_week_focus tool. Unique on (quarter_id, priority_id, week_number).
+// =============================================================================
+
+export const chatSessions = pgTable(
+  'chat_sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionType: text('session_type').notNull(), // onboarding|creation|quarter|weekly|daily|master
+    contextRef: text('context_ref'), // quarter_id / week_start_date / day_date / new_priority_id
+    priorityId: text('priority_id').references(() => priorities.id, { onDelete: 'set null' }),
+    openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    totalCostUsd: numeric('total_cost_usd', { precision: 10, scale: 4 })
+      .notNull()
+      .default('0'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_chat_sessions_user_type')
+      .on(table.userId, table.sessionType)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_chat_sessions_planning')
+      .on(table.userId, table.sessionType, table.contextRef, table.priorityId)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+export const generationLocks = pgTable(
+  'generation_locks',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    lockKey: text('lock_key').notNull(),
+    acquiredAt: timestamp('acquired_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.lockKey] }),
+    index('idx_generation_locks_expires').on(table.expiresAt),
+  ],
+);
+
+export const quarterWeekFocus = pgTable(
+  'quarter_week_focus',
+  {
+    id: text('id').primaryKey(),
+    quarterId: text('quarter_id')
+      .notNull()
+      .references(() => quarters.id, { onDelete: 'cascade' }),
+    priorityId: text('priority_id')
+      .notNull()
+      .references(() => priorities.id, { onDelete: 'cascade' }),
+    weekNumber: integer('week_number').notNull(),
+    focusLabel: text('focus_label').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_qwf_unique').on(table.quarterId, table.priorityId, table.weekNumber),
+    index('idx_qwf_quarter_week').on(table.quarterId, table.weekNumber),
+  ],
+);
+
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(), // user|assistant|tool_result
+    /**
+     * Anthropic-shape content. For role='user' or 'assistant', this is a
+     * `ContentBlock[]` (possibly with tool_use blocks). For role='tool_result',
+     * it's a `ToolResultBlockParam[]` we inject back into the conversation
+     * after server-side tool execution.
+     */
+    content: jsonb('content').notNull(),
+    costUsd: numeric('cost_usd', { precision: 10, scale: 6 }).notNull().default('0'),
+    isComplete: boolean('is_complete').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('idx_chat_messages_session').on(table.sessionId, table.createdAt)],
+);
+
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type GenerationLock = typeof generationLocks.$inferSelect;
+export type QuarterWeekFocus = typeof quarterWeekFocus.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;
