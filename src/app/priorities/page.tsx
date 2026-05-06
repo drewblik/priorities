@@ -73,6 +73,12 @@ export default async function CouncilHomePage({
             Plan Quarter
           </Link>
           <Link
+            href="/plan/week"
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+          >
+            Plan Week
+          </Link>
+          <Link
             href="/settings/profile"
             className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
           >

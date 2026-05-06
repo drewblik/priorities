@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentSession } from '@/auth';
 import { ANTHROPIC_MODEL_IDS } from '@/lib/anthropic-models';
+import { VERBOSITY_IDS } from '@/lib/chatbot-verbosity';
 import { applySettingsPatch, getSettingsView, type SettingsPatch } from '@/lib/settings';
 
 export const runtime = 'nodejs';
@@ -19,6 +20,7 @@ const PatchSchema = z.object({
     .optional(),
   anthropicApiKey: z.union([z.string().trim().min(1).max(500), z.null()]).optional(),
   selectedModel: z.enum(ANTHROPIC_MODEL_IDS as unknown as [string, ...string[]]).optional(),
+  chatbotVerbosity: z.enum(VERBOSITY_IDS as unknown as [string, ...string[]]).optional(),
   dailyCostCapUsd: z.number().nonnegative().max(10_000).optional(),
   monthlyCostCapUsd: z.number().nonnegative().max(100_000).optional(),
   planningDayOfWeek: z.number().int().min(0).max(6).optional(),

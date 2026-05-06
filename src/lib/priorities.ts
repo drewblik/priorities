@@ -46,6 +46,18 @@ export async function getQuarterlyPlanningQueue(userId: string): Promise<Priorit
   );
 }
 
+/** Active priorities with `'weekly'` in `check_in_cadence`, ordered by
+ *  position. Used by the Weekly Plan page (M13) as the queue. */
+export async function getWeeklyPlanningQueue(userId: string): Promise<Priority[]> {
+  const all = await getPrioritiesForUser(userId);
+  return all.filter(
+    (p) =>
+      p.status === 'active' &&
+      Array.isArray(p.checkInCadence) &&
+      (p.checkInCadence as string[]).includes('weekly'),
+  );
+}
+
 export async function getPriorityById(
   userId: string,
   id: string,

@@ -64,6 +64,7 @@ export const userSettings = pgTable('user_settings', {
     .references(() => users.id, { onDelete: 'cascade' }),
   anthropicApiKey: text('anthropic_api_key'), // AES-GCM-encrypted envelope (base64); see src/lib/encryption.ts
   selectedModel: text('selected_model').notNull().default('claude-haiku-4-5-20251001'),
+  chatbotVerbosity: text('chatbot_verbosity').notNull().default('balanced'),
   dailyCostCapUsd: numeric('daily_cost_cap_usd', { precision: 10, scale: 2 })
     .notNull()
     .default('5.00'),

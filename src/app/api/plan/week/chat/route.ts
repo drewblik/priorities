@@ -22,18 +22,16 @@ import { recordCallCost, withinCostCap } from '@/lib/cost-cap';
 import { acquireLock, releaseLock } from '@/lib/generation-locks';
 import { getPriorityById } from '@/lib/priorities';
 import { getMemoryForPriority } from '@/lib/priority-memory';
-import {
-  alreadyClaimedByOthers,
-  buildQuarterSystemPrompt,
-} from '@/lib/quarter-planning-prompt';
-import {
-  QUARTER_PLANNING_TOOLS,
-  executeQuarterTool,
-} from '@/lib/quarter-planning-tools';
-import { getQuarterById, weeksInQuarter } from '@/lib/quarters';
-import { getQuarterWeekFocusForQuarter } from '@/lib/quarter-week-focus';
+import { ensureCurrentQuarter } from '@/lib/quarters';
 import { getSettingsView } from '@/lib/settings';
 import { encodeSseEvent, SSE_HEADERS, type SseEvent } from '@/lib/sse';
+import { weekUtcBounds, weekNumberWithinQuarter } from '@/lib/week-utils';
+import { loadWeeklyContext } from '@/lib/weekly-context';
+import { buildWeeklySystemPrompt } from '@/lib/weekly-planning-prompt';
+import {
+  WEEKLY_PLANNING_TOOLS,
+  executeWeeklyTool,
+} from '@/lib/weekly-planning-tools';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -73,22 +71,22 @@ export async function POST(req: Request) {
 
   const userId = session.user.id;
   const chatSession = await getSessionByIdForUser(userId, body.sessionId);
-  if (!chatSession || chatSession.sessionType !== 'quarter' || chatSession.closedAt !== null) {
-    return jsonError(404, 'session_not_found', 'No open quarter session.');
+  if (!chatSession || chatSession.sessionType !== 'weekly' || chatSession.closedAt !== null) {
+    return jsonError(404, 'session_not_found', 'No open weekly session.');
   }
   if (!chatSession.priorityId || !chatSession.contextRef) {
-    return jsonError(400, 'session_misconfigured', 'Session missing priority or quarter ref.');
+    return jsonError(400, 'session_misconfigured', 'Session missing priority or week ref.');
   }
 
-  const [priority, quarter] = await Promise.all([
-    getPriorityById(userId, chatSession.priorityId),
-    getQuarterById(userId, chatSession.contextRef),
-  ]);
-  if (!priority || !quarter) {
-    return jsonError(404, 'priority_or_quarter_not_found', 'Priority or quarter missing.');
-  }
+  const weekStartISO = chatSession.contextRef;
+  const { endISO: weekEndISO } = weekUtcBounds(weekStartISO, session.user.timezone);
+  const weekEnd = weekEndISO; // YYYY-MM-DD shadow
 
-  // Up-front cost gate. Estimate from the existing thread + new message.
+  const priority = await getPriorityById(userId, chatSession.priorityId);
+  const quarter = await ensureCurrentQuarter(userId, session.user.timezone);
+  if (!priority) return jsonError(404, 'priority_not_found', 'Priority missing.');
+
+  // Cost gate.
   const existingThread = await loadThread(chatSession.id);
   let estimatedInputTokens = estimateInputTokensFromText(body.message);
   for (const m of existingThread) {
@@ -110,11 +108,10 @@ export async function POST(req: Request) {
     return jsonError(400, code, 'Set your Anthropic API key in Settings → API Key.');
   }
 
-  // Verbosity → max_tokens. Lookup once before the loop; same budget per turn.
   const settingsView = await getSettingsView(userId);
   const maxOutputTokens = verbosityToMaxTokens(settingsView?.chatbotVerbosity ?? 'balanced');
 
-  const projectedUsd = projectedCallUsd(model, estimatedInputTokens);
+  const projectedUsd = projectedCallUsd(model, estimatedInputTokens, maxOutputTokens);
   const cap = await withinCostCap(userId, projectedUsd);
   if (!cap.ok) {
     return singleSseResponse({
@@ -127,11 +124,9 @@ export async function POST(req: Request) {
     });
   }
 
-  // Persist the user's new message before opening the lock so it survives
-  // a stream crash (we want the user's input retained either way).
   await appendUserMessage(chatSession.id, body.message);
 
-  const lockKey = `plan:quarter:${quarter.id}`;
+  const lockKey = `plan:weekly:${weekStartISO}`;
   const lockResult = await acquireLock(userId, lockKey);
   if (!lockResult.acquired) {
     return singleSseResponse({
@@ -140,20 +135,40 @@ export async function POST(req: Request) {
     });
   }
 
-  // Build system prompt + tool context.
-  const totalWeeks = weeksInQuarter(quarter.startDate, quarter.endDate);
+  // Build system prompt with weekly context.
+  const weekNumber = weekNumberWithinQuarter(weekStartISO, quarter);
   const recentMemory = (await getMemoryForPriority(userId, priority.id)).slice(0, 10);
-  const allFocus = await getQuarterWeekFocusForQuarter(userId, quarter.id);
-  const systemPrompt = buildQuarterSystemPrompt({
+  const ctx = await loadWeeklyContext({
+    userId,
+    weekStartISO,
+    weekEndISO: weekEnd,
+    currentPriorityId: priority.id,
+    currentPriorityPosition: priority.position,
+    currentQuarterId: quarter.id,
+    weekNumberInQuarter: weekNumber,
+    userTimezone: session.user.timezone,
+  });
+  const systemPrompt = buildWeeklySystemPrompt({
     user: { name: session.user.name ?? null, email: session.user.email },
     priority,
+    weekStartISO,
+    weekEndISO: weekEnd,
     quarter,
-    totalWeeks,
-    alreadyClaimedWeeks: alreadyClaimedByOthers(allFocus, priority.id),
+    weekNumberInQuarter: weekNumber,
+    quarterFocusForThisWeek: ctx.quarterFocusForThisWeek,
     recentMemory,
+    alreadyScheduledByHigherPriorities: ctx.alreadyScheduledByHigherPriorities,
+    calendarFeedEvents: ctx.calendarFeedEvents,
+    userTimezone: session.user.timezone,
   });
 
-  const toolCtx = { userId, quarterId: quarter.id, priorityId: priority.id };
+  const toolCtx = {
+    userId,
+    priorityId: priority.id,
+    userTimezone: session.user.timezone,
+    weekStartISO,
+    weekEndISO: weekEnd,
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -162,14 +177,12 @@ export async function POST(req: Request) {
 
       try {
         for (let turn = 0; turn < MAX_TOOL_LOOP_TURNS; turn++) {
-          // Re-load the thread each turn so newly-appended assistant + tool
-          // results are included in the next call.
           const thread = await loadThread(chatSession.id);
           const apiStream = client.messages.stream({
             model,
             max_tokens: maxOutputTokens,
             system: systemPrompt,
-            tools: QUARTER_PLANNING_TOOLS,
+            tools: WEEKLY_PLANNING_TOOLS,
             messages: thread,
           });
 
@@ -183,18 +196,11 @@ export async function POST(req: Request) {
           }
 
           const final = await apiStream.finalMessage();
-
-          // Persist the assistant turn (text + tool_use blocks). Cost is
-          // recorded both on the per-message row AND the session total.
           const usd = await recordCallCost(chatSession.id, model, {
             input_tokens: final.usage.input_tokens,
             output_tokens: final.usage.output_tokens,
           });
-          await appendAssistantMessage(
-            chatSession.id,
-            final.content as ContentBlockParam[],
-            usd,
-          );
+          await appendAssistantMessage(chatSession.id, final.content as ContentBlockParam[], usd);
           send({
             type: 'message_done',
             usage: {
@@ -219,7 +225,7 @@ export async function POST(req: Request) {
               name: block.name,
               input: block.input,
             });
-            const result = await executeQuarterTool(block.name, block.input, toolCtx);
+            const result = await executeWeeklyTool(block.name, block.input, toolCtx);
             send(
               result.ok
                 ? { type: 'tool_result', id: block.id, ok: true, payload: result.payload }
@@ -233,13 +239,9 @@ export async function POST(req: Request) {
                 : `error: ${result.reason}`,
               is_error: !result.ok,
             });
-            if (block.name === 'signal_done' && result.ok) {
-              signaledThisRound = true;
-            }
+            if (block.name === 'signal_done' && result.ok) signaledThisRound = true;
           }
 
-          // Persist the tool_result turn so the next loop iteration's
-          // loadThread() picks it up.
           await appendToolResult(chatSession.id, toolResults as ContentBlockParam[]);
 
           if (signaledThisRound) {
@@ -252,7 +254,7 @@ export async function POST(req: Request) {
         void signaledDone;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'stream crashed';
-        console.error('quarter-plan stream error:', message);
+        console.error('weekly-plan stream error:', message);
         send({ type: 'error', code: 'stream_error', message });
       } finally {
         await releaseLock(userId, lockKey);

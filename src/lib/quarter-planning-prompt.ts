@@ -61,14 +61,19 @@ export function buildQuarterSystemPrompt(input: BuildQuarterSystemPromptInput): 
   ].join('\n');
 }
 
-/** Convenience for building the local-only first assistant message that
- *  primes the broad-strokes-first pass (per M12 design decision 10). This
- *  message is rendered in the UI but NEVER sent to Anthropic. */
+/**
+ * Local-only first assistant message that primes broad-strokes-first
+ * planning (per M12 design decision 10). Rendered in the UI but NEVER
+ * sent to Anthropic. Domain-neutral — no fitness-coded examples; the
+ * chatbot is free to suggest themes drawn from the priority's pinned
+ * summary + memory entries.
+ */
 export function buildBroadStrokesOpener(priorityName: string, totalWeeks: number): string {
+  const weeks = totalWeeks === 1 ? 'week' : 'weeks';
   return [
-    `Let's plan ${totalWeeks} ${totalWeeks === 1 ? 'week' : 'weeks'} for **${priorityName}**.`,
+    `Let's plan ${totalWeeks} ${weeks} for **${priorityName}**.`,
     '',
-    `Start broad — give me a 1-2 word theme for each week (e.g., "Base", "Build 1", "Peak", "Recovery"). We'll drill into details after.`,
+    `Start with the broad arc — describe the rough trajectory you want, or give a short theme per week if that's easier. We'll work out the details together.`,
   ].join('\n');
 }
 
