@@ -2,11 +2,6 @@ import { redirect } from 'next/navigation';
 import { requireUser } from '@/auth';
 
 const PLACEHOLDERS: Record<string, { label: string; comingIn: string; description: string }> = {
-  planning: {
-    label: 'Planning',
-    comingIn: 'M14',
-    description: 'Choose your weekly planning day and your evening review time.',
-  },
   data: {
     label: 'Data',
     comingIn: 'M19',
