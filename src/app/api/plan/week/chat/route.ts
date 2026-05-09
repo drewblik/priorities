@@ -20,7 +20,7 @@ import { getSessionByIdForUser } from '@/lib/chat-sessions';
 import { verbosityToMaxTokens } from '@/lib/chatbot-verbosity';
 import { recordCallCost, withinCostCap } from '@/lib/cost-cap';
 import { acquireLock, releaseLock } from '@/lib/generation-locks';
-import { getPriorityById } from '@/lib/priorities';
+import { getPriorityById, getWeeklyPlanningQueue } from '@/lib/priorities';
 import { getMemoryForPriority } from '@/lib/priority-memory';
 import { ensureCurrentQuarter } from '@/lib/quarters';
 import { getSettingsView } from '@/lib/settings';
@@ -138,12 +138,22 @@ export async function POST(req: Request) {
   // Build system prompt with weekly context.
   const weekNumber = weekNumberWithinQuarter(weekStartISO, quarter);
   const recentMemory = (await getMemoryForPriority(userId, priority.id)).slice(0, 10);
+
+  // "Earlier priorities" = those before current in the queue. We pass IDs
+  // explicitly rather than filtering by `position <` because position values
+  // can collide if a priority was deleted without renumbering — a legitimate
+  // v1 data state that would otherwise silently exclude rows.
+  const queue = await getWeeklyPlanningQueue(userId);
+  const currentIdx = queue.findIndex((p) => p.id === priority.id);
+  const earlierPriorityIds =
+    currentIdx > 0 ? queue.slice(0, currentIdx).map((p) => p.id) : [];
+
   const ctx = await loadWeeklyContext({
     userId,
     weekStartISO,
     weekEndISO: weekEnd,
     currentPriorityId: priority.id,
-    currentPriorityPosition: priority.position,
+    earlierPriorityIds,
     currentQuarterId: quarter.id,
     weekNumberInQuarter: weekNumber,
     userTimezone: session.user.timezone,
