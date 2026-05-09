@@ -77,6 +77,12 @@ export default async function TodayPage({
         </div>
         <div className="flex flex-col items-end gap-1">
           <Link
+            href="/plan/day"
+            className="text-sm font-medium text-primary hover:opacity-80"
+          >
+            Plan tomorrow →
+          </Link>
+          <Link
             href="/priorities"
             className="text-sm text-muted-foreground hover:text-foreground"
           >

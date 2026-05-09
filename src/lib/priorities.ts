@@ -58,6 +58,18 @@ export async function getWeeklyPlanningQueue(userId: string): Promise<Priority[]
   );
 }
 
+/** Active priorities with `'daily'` in `check_in_cadence`, ordered by
+ *  position. Used by the Daily Plan page (M14) as the queue. */
+export async function getDailyPlanningQueue(userId: string): Promise<Priority[]> {
+  const all = await getPrioritiesForUser(userId);
+  return all.filter(
+    (p) =>
+      p.status === 'active' &&
+      Array.isArray(p.checkInCadence) &&
+      (p.checkInCadence as string[]).includes('daily'),
+  );
+}
+
 export async function getPriorityById(
   userId: string,
   id: string,

@@ -14,7 +14,7 @@ const TABS: Tab[] = [
   { href: '/settings/profile', label: 'Profile', enabled: true },
   { href: '/settings/api-key', label: 'API Key', enabled: true },
   { href: '/settings/calendar', label: 'Calendar', enabled: true },
-  { href: '/settings/planning', label: 'Planning', enabled: false, comingIn: 'M14' },
+  { href: '/settings/planning', label: 'Planning', enabled: true },
   { href: '/settings/data', label: 'Data', enabled: false, comingIn: 'M19' },
 ];
 
