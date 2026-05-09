@@ -1,7 +1,6 @@
-import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import {
-  calendarFeedEvents,
   events as eventsTable,
   priorities,
   tasks as tasksTable,
@@ -34,17 +33,76 @@ export type LoadWeeklyContextInput = {
   weekStartISO: string;
   weekEndISO: string;
   currentPriorityId: string;
-  currentPriorityPosition: number;
+  /** IDs of priorities that come BEFORE the current one in the queue.
+   *  Filtered explicitly rather than via `position <` arithmetic so duplicate
+   *  position values (which can happen if a priority was deleted and the
+   *  remaining rows weren't renumbered) don't silently exclude rows. */
+  earlierPriorityIds: string[];
   currentQuarterId: string;
   weekNumberInQuarter: number;
   userTimezone: string;
 };
 
+async function loadHigherTasks(
+  input: LoadWeeklyContextInput,
+  startUtc: Date,
+  endUtc: Date,
+) {
+  if (input.earlierPriorityIds.length === 0) return [];
+  return db
+    .select({
+      task: tasksTable,
+      priorityId: priorities.id,
+      priorityName: priorities.name,
+      priorityIcon: priorities.icon,
+    })
+    .from(tasksTable)
+    .innerJoin(priorities, eq(priorities.id, tasksTable.ownerPriorityId))
+    .where(
+      and(
+        eq(tasksTable.userId, input.userId),
+        isNull(tasksTable.deletedAt),
+        isNull(priorities.deletedAt),
+        inArray(priorities.id, input.earlierPriorityIds),
+        sql`(${tasksTable.targetDate} BETWEEN ${input.weekStartISO}::date AND ${input.weekEndISO}::date
+             OR (${tasksTable.timeBlockStart} >= ${startUtc}
+                 AND ${tasksTable.timeBlockStart} <= ${endUtc}))`,
+      ),
+    );
+}
+
+async function loadHigherEvents(
+  input: LoadWeeklyContextInput,
+  startUtc: Date,
+  endUtc: Date,
+) {
+  if (input.earlierPriorityIds.length === 0) return [];
+  return db
+    .select({
+      event: eventsTable,
+      priorityId: priorities.id,
+      priorityName: priorities.name,
+      priorityIcon: priorities.icon,
+    })
+    .from(eventsTable)
+    .innerJoin(priorities, eq(priorities.id, eventsTable.ownerPriorityId))
+    .where(
+      and(
+        eq(eventsTable.userId, input.userId),
+        isNull(eventsTable.deletedAt),
+        isNull(priorities.deletedAt),
+        inArray(priorities.id, input.earlierPriorityIds),
+        gte(eventsTable.startTime, startUtc),
+        lte(eventsTable.startTime, endUtc),
+      ),
+    );
+}
+
 /**
  * Loads the cross-priority context the Weekly Planning chatbot needs in
- * its system prompt. Tasks/events from higher-priority Priorities (lower
- * `position` than current) for the week + all calendar feed events for
- * the week + the quarter's focus label for this week (if set).
+ * its system prompt. Tasks/events from higher-priority Priorities (those
+ * earlier in the queue than current) for the week + all calendar feed
+ * events for the week + the quarter's focus label for this week (if set).
  */
 export async function loadWeeklyContext(
   input: LoadWeeklyContextInput,
@@ -52,48 +110,8 @@ export async function loadWeeklyContext(
   const { startUtc, endUtc } = weekUtcBounds(input.weekStartISO, input.userTimezone);
 
   const [higherTaskRows, higherEventRows, feedEvents, allFocus] = await Promise.all([
-    // Higher-priority tasks for this week.
-    db
-      .select({
-        task: tasksTable,
-        priorityId: priorities.id,
-        priorityName: priorities.name,
-        priorityIcon: priorities.icon,
-        priorityPosition: priorities.position,
-      })
-      .from(tasksTable)
-      .innerJoin(priorities, eq(priorities.id, tasksTable.ownerPriorityId))
-      .where(
-        and(
-          eq(tasksTable.userId, input.userId),
-          isNull(tasksTable.deletedAt),
-          isNull(priorities.deletedAt),
-          sql`${priorities.position} < ${input.currentPriorityPosition}`,
-          sql`(${tasksTable.targetDate} BETWEEN ${input.weekStartISO}::date AND ${input.weekEndISO}::date
-               OR (${tasksTable.timeBlockStart} >= ${startUtc}
-                   AND ${tasksTable.timeBlockStart} <= ${endUtc}))`,
-        ),
-      ),
-    // Higher-priority events for this week.
-    db
-      .select({
-        event: eventsTable,
-        priorityId: priorities.id,
-        priorityName: priorities.name,
-        priorityIcon: priorities.icon,
-      })
-      .from(eventsTable)
-      .innerJoin(priorities, eq(priorities.id, eventsTable.ownerPriorityId))
-      .where(
-        and(
-          eq(eventsTable.userId, input.userId),
-          isNull(eventsTable.deletedAt),
-          isNull(priorities.deletedAt),
-          sql`${priorities.position} < ${input.currentPriorityPosition}`,
-          gte(eventsTable.startTime, startUtc),
-          lte(eventsTable.startTime, endUtc),
-        ),
-      ),
+    loadHigherTasks(input, startUtc, endUtc),
+    loadHigherEvents(input, startUtc, endUtc),
     getCalendarFeedEventsForRange(
       input.userId,
       input.weekStartISO,

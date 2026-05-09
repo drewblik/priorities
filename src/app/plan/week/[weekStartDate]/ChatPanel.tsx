@@ -318,15 +318,7 @@ export function ChatPanel({ initial }: Props) {
                 disabled={streaming}
                 className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
-                Finish &amp; Next
-              </button>
-              <button
-                type="button"
-                onClick={() => finishOrSkip('skip')}
-                disabled={streaming}
-                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Skip without saving
+                Next priority →
               </button>
             </div>
           </div>
@@ -351,13 +343,18 @@ export function ChatPanel({ initial }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => finishOrSkip('skip')}
+                onClick={() => finishOrSkip('finish')}
                 disabled={streaming}
-                className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
               >
-                Skip this Priority
+                Next priority →
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tap <span className="font-medium">Next priority</span> when
+              you&apos;re ready to move on. Tasks and events you&apos;ve already
+              saved stay; this just closes the conversation for this Priority.
+            </p>
           </form>
         )}
       </div>

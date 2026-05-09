@@ -78,7 +78,7 @@ export function ChatPanel({ initial, quarterId }: Props) {
   const priority = initial.currentPriority;
   const opener =
     messages.length === 0
-      ? `Let's plan ${initial.totalWeeks} ${initial.totalWeeks === 1 ? 'week' : 'weeks'} for **${priority.name}**. Start broad — give me a 1-2 word theme for each week (e.g., "Base", "Build 1", "Peak", "Recovery"). We'll drill into details after.`
+      ? `Let's plan ${initial.totalWeeks} ${initial.totalWeeks === 1 ? 'week' : 'weeks'} for **${priority.name}**.\n\nStart with the broad arc — describe the rough trajectory you want, or give a short theme per week if that's easier. We'll work out the details together.`
       : null;
 
   async function send(e: React.FormEvent) {
@@ -268,7 +268,9 @@ export function ChatPanel({ initial, quarterId }: Props) {
 
         <ul className="space-y-3">
           {opener ? (
-            <li className="rounded-md bg-muted/40 px-3 py-2 text-sm">{opener}</li>
+            <li className="rounded-md bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap">
+              {opener}
+            </li>
           ) : null}
           {messages.map((m, i) => (
             <li
@@ -311,8 +313,9 @@ export function ChatPanel({ initial, quarterId }: Props) {
         {signaledDone ? (
           <div className="space-y-2 rounded-md border border-green-600/30 bg-green-600/5 p-3">
             <p className="text-sm text-green-700">
-              {priority.name} has signaled it's done planning. You can keep
-              going if there's more to discuss, or move to the next Priority.
+              {priority.name} has signaled it&apos;s done planning. You can
+              keep going if there&apos;s more to discuss, or move to the next
+              Priority.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -329,15 +332,7 @@ export function ChatPanel({ initial, quarterId }: Props) {
                 disabled={streaming}
                 className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
-                Finish &amp; Next
-              </button>
-              <button
-                type="button"
-                onClick={() => finishOrSkip('skip')}
-                disabled={streaming}
-                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Skip without saving
+                Next priority →
               </button>
             </div>
           </div>
@@ -351,7 +346,7 @@ export function ChatPanel({ initial, quarterId }: Props) {
               disabled={streaming}
               placeholder={
                 messages.length === 0
-                  ? 'Reply with broad week themes (e.g., "Week 1: Base. Week 2: Build. ...")'
+                  ? 'Reply with the broad arc, or themes per week…'
                   : 'Reply…'
               }
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary disabled:opacity-50"
@@ -366,13 +361,19 @@ export function ChatPanel({ initial, quarterId }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => finishOrSkip('skip')}
+                onClick={() => finishOrSkip('finish')}
                 disabled={streaming}
-                className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
               >
-                Skip this Priority
+                Next priority →
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tap <span className="font-medium">Next priority</span> when
+              you&apos;re ready to move on. Week-focus chips you&apos;ve
+              already saved stay; this just closes the conversation for this
+              Priority.
+            </p>
           </form>
         )}
       </div>
