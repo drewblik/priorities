@@ -3,7 +3,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { db } from '@/db/client';
 import { priorityMemory } from '@/db/schema';
 import { newId } from '@/lib/id';
-import { createEvent } from '@/lib/events';
+import { createEvent, getEventById, softDeleteEvent, updateEvent } from '@/lib/events';
 import { getTaskById, updateTask } from '@/lib/tasks';
 import { describeOverlap, findOverlap } from '@/lib/time-block-overlap';
 
@@ -53,6 +53,40 @@ export const DAILY_PLANNING_TOOLS: Tool[] = [
         description: { type: 'string', maxLength: 2000 },
       },
       required: ['title', 'start_time', 'end_time'],
+    },
+  },
+  {
+    name: 'update_event',
+    description:
+      "Modify a previously-created event's time, title, or description. Use this when the user wants to revise an event you already scheduled (e.g. shorten 6-9 PM to 6-7 PM) — DO NOT call create_event for revisions, that creates a duplicate. The event must belong to the current Priority. Overlap checks apply to the new range, ignoring this event's own old slot. Pass only the fields you want to change.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string', description: 'The event id from a prior create_event tool result.' },
+        start_time: {
+          type: 'string',
+          description: 'Optional new start: YYYY-MM-DDTHH:mm in user TZ on the planning day.',
+        },
+        end_time: {
+          type: 'string',
+          description: 'Optional new end: YYYY-MM-DDTHH:mm in user TZ. Must be after start_time.',
+        },
+        title: { type: 'string', minLength: 1, maxLength: 200 },
+        description: { type: 'string', maxLength: 2000 },
+      },
+      required: ['event_id'],
+    },
+  },
+  {
+    name: 'delete_event',
+    description:
+      'Soft-delete an event the current Priority created earlier. Use sparingly — only when the user explicitly wants to remove it entirely. The event must belong to the current Priority.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string' },
+      },
+      required: ['event_id'],
     },
   },
   {
@@ -191,6 +225,118 @@ export async function executeDailyTool(
         ok: true,
         payload: { event_id: created.id, title: created.title, start: startStr, end: endStr },
       };
+    }
+
+    if (name === 'update_event') {
+      const args = input as {
+        event_id?: unknown;
+        start_time?: unknown;
+        end_time?: unknown;
+        title?: unknown;
+        description?: unknown;
+      };
+      const eventId = typeof args.event_id === 'string' ? args.event_id.trim() : '';
+      if (!eventId) return { ok: false, reason: 'event_id required' };
+
+      const existing = await getEventById(ctx.userId, eventId);
+      if (!existing) return { ok: false, reason: 'event_not_found' };
+      if (existing.ownerPriorityId !== ctx.priorityId) {
+        return { ok: false, reason: 'event does not belong to the current Priority' };
+      }
+
+      const patch: {
+        startTime?: Date;
+        endTime?: Date;
+        title?: string;
+        description?: string | null;
+      } = {};
+
+      let newStartUtc = existing.startTime;
+      let newEndUtc = existing.endTime;
+
+      if (args.start_time !== undefined && args.start_time !== null) {
+        const s = typeof args.start_time === 'string' ? args.start_time.trim() : '';
+        if (!DATETIME_LOCAL.test(s)) {
+          return { ok: false, reason: 'start_time must be YYYY-MM-DDTHH:mm' };
+        }
+        if (s.slice(0, 10) !== ctx.dateISO) {
+          return { ok: false, reason: `times must fall on ${ctx.dateISO}` };
+        }
+        newStartUtc = fromZonedTime(s, ctx.userTimezone);
+        patch.startTime = newStartUtc;
+      }
+      if (args.end_time !== undefined && args.end_time !== null) {
+        const e = typeof args.end_time === 'string' ? args.end_time.trim() : '';
+        if (!DATETIME_LOCAL.test(e)) {
+          return { ok: false, reason: 'end_time must be YYYY-MM-DDTHH:mm' };
+        }
+        if (e.slice(0, 10) !== ctx.dateISO) {
+          return { ok: false, reason: `times must fall on ${ctx.dateISO}` };
+        }
+        newEndUtc = fromZonedTime(e, ctx.userTimezone);
+        patch.endTime = newEndUtc;
+      }
+      if (newEndUtc <= newStartUtc) {
+        return { ok: false, reason: 'end_time must be after start_time' };
+      }
+
+      if (args.title !== undefined && args.title !== null) {
+        const t = typeof args.title === 'string' ? args.title.trim() : '';
+        if (t.length === 0 || t.length > 200) {
+          return { ok: false, reason: 'title must be 1-200 chars' };
+        }
+        patch.title = t;
+      }
+      if (args.description !== undefined) {
+        if (args.description === null) {
+          patch.description = null;
+        } else {
+          const d = typeof args.description === 'string' ? args.description.trim() : '';
+          if (d.length > 2000) {
+            return { ok: false, reason: 'description must be 0-2000 chars' };
+          }
+          patch.description = d.length > 0 ? d : null;
+        }
+      }
+
+      // If we changed the time, re-check overlap (ignoring this event itself).
+      if (patch.startTime !== undefined || patch.endTime !== undefined) {
+        const overlap = await findOverlap({
+          userId: ctx.userId,
+          dateISO: ctx.dateISO,
+          candidateStartUtc: newStartUtc,
+          candidateEndUtc: newEndUtc,
+          currentPriorityId: ctx.priorityId,
+          earlierPriorityIds: ctx.earlierPriorityIds,
+          userTimezone: ctx.userTimezone,
+          ignoreEventId: eventId,
+        });
+        if (overlap) return { ok: false, reason: describeOverlap(overlap, ctx.userTimezone) };
+      }
+
+      if (Object.keys(patch).length === 0) {
+        return { ok: false, reason: 'no fields to update' };
+      }
+
+      const updated = await updateEvent(ctx.userId, eventId, patch);
+      if (!updated) return { ok: false, reason: 'update_failed' };
+      return { ok: true, payload: { event_id: updated.id, title: updated.title } };
+    }
+
+    if (name === 'delete_event') {
+      const args = input as { event_id?: unknown };
+      const eventId = typeof args.event_id === 'string' ? args.event_id.trim() : '';
+      if (!eventId) return { ok: false, reason: 'event_id required' };
+
+      const existing = await getEventById(ctx.userId, eventId);
+      if (!existing) return { ok: false, reason: 'event_not_found' };
+      if (existing.ownerPriorityId !== ctx.priorityId) {
+        return { ok: false, reason: 'event does not belong to the current Priority' };
+      }
+
+      const ok = await softDeleteEvent(ctx.userId, eventId);
+      if (!ok) return { ok: false, reason: 'delete_failed' };
+      return { ok: true, payload: { event_id: eventId, deleted: true } };
     }
 
     if (name === 'add_memory') {
