@@ -8,13 +8,14 @@ type Props = {
    *  chips with their actual color. */
   priorityById: Map<string, { name: string; color: string }>;
   onCancel: () => void;
-  /** M16 stub: shows a "Confirm execution coming in M17" inline note when
-   *  tapped. M17 replaces this with a real handler that POSTs to
-   *  /api/chat/master/confirm. */
-  onConfirmStub: () => void;
+  /** Real Confirm handler (M17). Posts the preview back to the server,
+   *  which validates + executes the proposed actions atomically. */
+  onConfirm: () => void;
+  /** Disables Confirm while the parent's POST is in flight. */
+  busy?: boolean;
 };
 
-export function PreviewCard({ preview, priorityById, onCancel, onConfirmStub }: Props) {
+export function PreviewCard({ preview, priorityById, onCancel, onConfirm, busy = false }: Props) {
   return (
     <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4">
       <div>
@@ -71,23 +72,20 @@ export function PreviewCard({ preview, priorityById, onCancel, onConfirmStub }: 
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={onConfirmStub}
-          disabled
-          title="Confirm execution lands in M17"
-          className="cursor-not-allowed rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground opacity-50"
+          onClick={onConfirm}
+          disabled={busy || preview.proposed_actions.length === 0}
+          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Confirm
+          {busy ? 'Saving…' : 'Confirm'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+          disabled={busy}
+          className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
         >
           Cancel
         </button>
-        <span className="text-[11px] text-muted-foreground">
-          (Confirm execution lands in M17.)
-        </span>
       </div>
     </div>
   );

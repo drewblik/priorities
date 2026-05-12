@@ -220,6 +220,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       response: parsedResponse.response,
+      /** Server-issued timestamp the client echoes on confirm. Used to
+       *  enforce the 5-minute preview expiry per TDD §679. M17 reads this
+       *  in the confirm route. */
+      preview_generated_at: new Date().toISOString(),
       usage: {
         input_tokens: completion.usage.input_tokens,
         output_tokens: completion.usage.output_tokens,
