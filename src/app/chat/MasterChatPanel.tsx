@@ -6,7 +6,13 @@ import type { ScreenContext } from '@/lib/master-chat-screen-context';
 import { PreviewCard } from './PreviewCard';
 
 export type MasterChatInitial = {
-  initialMessages: { role: 'user' | 'assistant'; text: string }[];
+  initialMessages: {
+    role: 'user' | 'assistant';
+    text: string;
+    /** Hydrated from prior `submit_preview` tool_use blocks: when true,
+     *  the assistant bubble renders with the amber clarification badge. */
+    needsClarification?: boolean;
+  }[];
   priorityById: Record<string, { name: string; color: string }>;
   screenContext: ScreenContext;
 };
