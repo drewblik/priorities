@@ -114,7 +114,7 @@ function describeUntimedTask(t: CurrentPriorityTask): string {
 function describeOwnEvent(e: CurrentPriorityEvent, tz: string): string {
   const s = formatInTimeZone(e.startTime, tz, 'h:mm a');
   const en = formatInTimeZone(e.endTime, tz, 'h:mm a');
-  return `- ${s}–${en} ${e.title}`;
+  return `- [event ${e.id}] ${s}–${en} ${e.title}`;
 }
 
 function describeBlockedByHigher(item: AlreadyBlockedItem, tz: string): string {
