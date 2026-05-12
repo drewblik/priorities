@@ -14,6 +14,10 @@ export type MasterChatInitial = {
 type DisplayMessage = {
   role: 'user' | 'assistant';
   text: string;
+  /** When true, the assistant bubble shows a "needs clarification" badge
+   *  so the user can distinguish a question-back from an action proposal
+   *  or a plain ack. Only relevant for assistant rows. */
+  needsClarification?: boolean;
 };
 
 type Banner =
@@ -45,9 +49,13 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
     setInput('');
     setBanner(null);
     setPreview(null);
+    // Optimistically push the user bubble; on any non-success path below
+    // we rollback by trimming the last message so failed sends don't leave
+    // ghost user copies in state.
     setMessages((prev) => [...prev, { role: 'user', text: userText }]);
     setBusy(true);
 
+    let succeeded = false;
     try {
       const res = await fetch('/api/chat/master', {
         method: 'POST',
@@ -77,12 +85,18 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
 
       const r = j.response;
 
-      // needs_clarification → render as a regular assistant text bubble; no preview card.
+      // needs_clarification → render as a regular assistant text bubble with
+      // a "needs clarification" badge; no preview card.
       if (r.needs_clarification && r.needs_clarification.trim().length > 0) {
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', text: r.needs_clarification as string },
+          {
+            role: 'assistant',
+            text: r.needs_clarification as string,
+            needsClarification: true,
+          },
         ]);
+        succeeded = true;
         return;
       }
 
@@ -95,6 +109,7 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
       // Always show the preview card (even when proposed_actions is empty —
       // gives the user a chance to elaborate).
       setPreview(r);
+      succeeded = true;
     } catch (err) {
       setBanner({
         tone: 'error',
@@ -102,6 +117,10 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
       });
     } finally {
       setBusy(false);
+      if (!succeeded) {
+        // Roll back the optimistic user bubble — the send didn't land.
+        setMessages((prev) => prev.slice(0, -1));
+      }
     }
   }
 
@@ -148,11 +167,20 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
             className={
               m.role === 'user'
                 ? 'rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm'
-                : 'rounded-md bg-muted/40 px-3 py-2 text-sm'
+                : m.needsClarification
+                  ? 'rounded-md border border-amber-600/30 bg-amber-600/5 px-3 py-2 text-sm'
+                  : 'rounded-md bg-muted/40 px-3 py-2 text-sm'
             }
           >
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {m.role}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {m.role}
+              </span>
+              {m.needsClarification ? (
+                <span className="rounded-full border border-amber-600/30 bg-amber-600/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
+                  💭 needs clarification
+                </span>
+              ) : null}
             </div>
             <div className="mt-1 whitespace-pre-wrap">{m.text}</div>
           </li>
