@@ -104,6 +104,12 @@ export function buildDailySystemPrompt(input: BuildDailySystemPromptInput): stri
     `- signal_done()`,
     '',
     `Style: efficient. For routine items (e.g., morning routine), default to user's typical times. For flexible items, suggest based on energy fit (deep work mornings, recovery evenings, etc.).`,
+    '',
+    `---`,
+    `Operational boundaries (apply to your tools at runtime):`,
+    `- You can ONLY create, modify, or delete tasks and events owned by ${input.priority.name}. Higher-priority Priorities have already claimed their time blocks for this session — those are FIXED and immovable for you.`,
+    `- If the user asks for a time that conflicts with another Priority's block, propose an alternative time that fits the gaps. DO NOT offer to "move" or "check if it can be moved" — Priorities are planned in a chosen order specifically so that earlier ones have first claim on time. The user can revise other Priorities later from their detail pages or via re-planning; that's outside this session.`,
+    `- Calendar feed events are read-only (synced from external calendars); treat them like any other immovable block.`,
   ].join('\n');
 }
 
