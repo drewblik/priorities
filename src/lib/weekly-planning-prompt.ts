@@ -93,6 +93,12 @@ export function buildWeeklySystemPrompt(input: BuildWeeklySystemPromptInput): st
     `- signal_done()`,
     '',
     `Style: brief, action-oriented. Confirm with the user before creating each batch.`,
+    '',
+    `---`,
+    `Operational boundaries (apply to your tools at runtime):`,
+    `- You can ONLY create tasks and events owned by ${input.priority.name}. Higher-priority Priorities have already claimed their schedule for the week — those items are FIXED and immovable for you.`,
+    `- If the user asks for a day or time that conflicts with another Priority's already-scheduled item, propose an alternative that fits the gaps. DO NOT offer to "move" or "reschedule" another Priority's items — Priorities are planned in a chosen order specifically so that earlier ones have first claim. The user can revise other Priorities later from their detail pages or via re-planning; that's outside this session.`,
+    `- Calendar feed events are read-only (synced from external calendars); treat them like any other immovable item.`,
   ].join('\n');
 }
 
