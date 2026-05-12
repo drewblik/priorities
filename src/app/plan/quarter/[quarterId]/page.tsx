@@ -6,19 +6,27 @@ import { getClosedSessions, getOrCreateSession } from '@/lib/chat-sessions';
 import { getQuarterlyPlanningQueue } from '@/lib/priorities';
 import { getQuarterById, weeksInQuarter } from '@/lib/quarters';
 import { getQuarterWeekFocusForQuarter } from '@/lib/quarter-week-focus';
+import { isHorizonComplete } from '@/lib/replan';
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import { ReplanModePicker } from '../../ReplanModePicker';
 import { ChatPanel, type ChatPanelInitial } from './ChatPanel';
 import { EndSessionPlaceholder } from './EndSessionPlaceholder';
 import { QuarterCalendar } from './QuarterCalendar';
 import { QueuePanel } from './QueuePanel';
 
+type SearchParams = { [key: string]: string | string[] | undefined };
+
 export default async function QuarterPlanPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ quarterId: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await requireUser();
   const { quarterId } = await params;
+  const sp = await searchParams;
+  const adjustMode = sp.mode === 'adjust';
 
   const [quarter, queue] = await Promise.all([
     getQuarterById(session.user.id, quarterId),
@@ -31,7 +39,22 @@ export default async function QuarterPlanPage({
   const closedPriorityIds = new Set(
     closed.map((s) => s.priorityId).filter((v): v is string => !!v),
   );
-  const currentPriority = queue.find((p) => !closedPriorityIds.has(p.id)) ?? null;
+
+  // If the horizon is complete (every queue priority has a closed session),
+  // surface the mode picker. In adjustMode we render the picker's hint copy
+  // and the queue's Redo buttons; otherwise we still bootstrap a current
+  // priority + chat for the normal resume flow.
+  const horizonComplete = await isHorizonComplete(
+    session.user.id,
+    'quarter',
+    quarterId,
+    queue.map((p) => p.id),
+  );
+
+  const currentPriority =
+    !horizonComplete || adjustMode
+      ? queue.find((p) => !closedPriorityIds.has(p.id)) ?? null
+      : null;
 
   // If there's a current priority, ensure a chat session exists for it and
   // load its thread for the ChatPanel.
@@ -94,13 +117,27 @@ export default async function QuarterPlanPage({
         </Link>
       </header>
 
+      {horizonComplete ? (
+        <ReplanModePicker
+          sessionType="quarter"
+          contextRef={quarterId}
+          adjustMode={adjustMode}
+        />
+      ) : null}
+
       <QueuePanel
         priorities={queue}
         currentPriorityId={currentPriority?.id ?? null}
         donePriorityIds={closedPriorityIds}
+        adjustMode={adjustMode}
+        contextRef={quarterId}
       />
 
-      <ChatPanel initial={initial} quarterId={quarterId} />
+      {horizonComplete && !adjustMode ? null : (
+        <>
+          <ChatPanel initial={initial} quarterId={quarterId} />
+        </>
+      )}
 
       <QuarterCalendar
         quarter={quarter}

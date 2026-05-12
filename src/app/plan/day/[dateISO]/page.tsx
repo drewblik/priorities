@@ -13,8 +13,10 @@ import {
 } from '@/lib/daily-utils';
 import { getEventsForDateRange } from '@/lib/events';
 import { getDailyPlanningQueue, getPrioritiesForUser } from '@/lib/priorities';
+import { isHorizonComplete } from '@/lib/replan';
 import { getTasksForDate } from '@/lib/tasks';
 import type { Event, Priority, Task } from '@/db/schema';
+import { ReplanModePicker } from '../../ReplanModePicker';
 import { ChatPanel, type DailyChatPanelInitial } from './ChatPanel';
 import { CaptureStepPlaceholder } from './CaptureStepPlaceholder';
 import { DayCalendar } from './DayCalendar';
@@ -95,6 +97,7 @@ export default async function DailyPlanPage({
           dateISO={dateISO}
           userName={session.user.name ?? null}
           userEmail={session.user.email}
+          adjustMode={sp.mode === 'adjust'}
         />
       ) : null}
     </main>
@@ -185,12 +188,14 @@ async function Step3({
   dateISO,
   userName,
   userEmail,
+  adjustMode,
 }: {
   userId: string;
   userTimezone: string;
   dateISO: string;
   userName: string | null;
   userEmail: string;
+  adjustMode: boolean;
 }) {
   // Suppress lint about unused params (carried for future M15 re-planning hooks).
   void userName;
@@ -201,7 +206,16 @@ async function Step3({
   const closedPriorityIds = new Set(
     closed.map((s) => s.priorityId).filter((v): v is string => !!v),
   );
-  const currentPriority = queue.find((p) => !closedPriorityIds.has(p.id)) ?? null;
+  const horizonComplete = await isHorizonComplete(
+    userId,
+    'daily',
+    dateISO,
+    queue.map((p) => p.id),
+  );
+  const currentPriority =
+    !horizonComplete || adjustMode
+      ? queue.find((p) => !closedPriorityIds.has(p.id)) ?? null
+      : null;
 
   // Snapshot data for the calendar (always loaded).
   const snapshot = await loadDayCalendarSnapshot({ userId, dateISO, userTimezone });
@@ -258,13 +272,23 @@ async function Step3({
 
   return (
     <>
+      {horizonComplete ? (
+        <ReplanModePicker
+          sessionType="daily"
+          contextRef={dateISO}
+          adjustMode={adjustMode}
+        />
+      ) : null}
+
       <QueuePanel
         priorities={queue}
         currentPriorityId={currentPriority?.id ?? null}
         donePriorityIds={closedPriorityIds}
+        adjustMode={adjustMode}
+        contextRef={dateISO}
       />
 
-      <ChatPanel initial={initial} />
+      {horizonComplete && !adjustMode ? null : <ChatPanel initial={initial} />}
 
       <DayCalendar
         dateISO={dateISO}
