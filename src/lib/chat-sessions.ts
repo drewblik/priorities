@@ -95,6 +95,45 @@ export async function getSessionByIdForUser(
   return rows[0] ?? null;
 }
 
+/**
+ * Find or create the long-lived master chat session for a user. Master
+ * Chat (M16) is a single session_type='master' row per user with
+ * `context_ref=null` and `priority_id=null` — used as the canonical chat
+ * thread for the always-available router across all pages.
+ */
+export async function getOrCreateMasterSession(userId: string): Promise<ChatSession> {
+  const existing = await db
+    .select()
+    .from(chatSessions)
+    .where(
+      and(
+        eq(chatSessions.userId, userId),
+        eq(chatSessions.sessionType, 'master'),
+        isNull(chatSessions.contextRef),
+        isNull(chatSessions.priorityId),
+        isNull(chatSessions.closedAt),
+        isNull(chatSessions.deletedAt),
+      ),
+    )
+    .orderBy(desc(chatSessions.openedAt))
+    .limit(1);
+
+  if (existing[0]) return existing[0];
+
+  const [created] = await db
+    .insert(chatSessions)
+    .values({
+      id: newId('chs'),
+      userId,
+      sessionType: 'master',
+      contextRef: null,
+      priorityId: null,
+    })
+    .returning();
+  if (!created) throw new Error('master_session_insert_failed');
+  return created;
+}
+
 export async function closeSession(userId: string, id: string): Promise<boolean> {
   const result = await db
     .update(chatSessions)

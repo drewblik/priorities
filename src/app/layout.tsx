@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { MasterChatButton } from './MasterChatButton';
 
 export const metadata: Metadata = {
   title: 'Priorities',
@@ -22,6 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-background text-foreground antialiased">
         {children}
+        <MasterChatButton />
       </body>
     </html>
   );
