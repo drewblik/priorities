@@ -1,16 +1,28 @@
 import type { Priority } from '@/db/schema';
+import { RedoPriorityButton } from '../../RedoPriorityButton';
 
 type Props = {
   priorities: Priority[];
   currentPriorityId: string | null;
   donePriorityIds: Set<string>;
+  /** When true, each completed priority gets a Redo button that reopens
+   *  its session via /api/plan/replan. Set by the parent page when
+   *  ?mode=adjust is in the URL. */
+  adjustMode?: boolean;
+  contextRef: string;
 };
 
-export function QueuePanel({ priorities, currentPriorityId, donePriorityIds }: Props) {
+export function QueuePanel({
+  priorities,
+  currentPriorityId,
+  donePriorityIds,
+  adjustMode = false,
+  contextRef,
+}: Props) {
   return (
     <details open className="rounded-md border border-border bg-background p-4">
       <summary className="cursor-pointer select-none text-base font-medium">
-        Queue ({priorities.length})
+        Queue ({priorities.length}){adjustMode ? ' — Adjust mode' : ''}
       </summary>
 
       <p className="mt-2 text-xs text-muted-foreground">
@@ -63,17 +75,26 @@ export function QueuePanel({ priorities, currentPriorityId, donePriorityIds }: P
                       : `· ${p.minMinutesPerWeek}–${p.maxMinutesPerWeek} min/wk`}
                   </span>
                 </div>
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
-                    state === 'current'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : state === 'done'
-                        ? 'border-green-600/30 bg-green-600/5 text-green-700'
-                        : 'border-border bg-muted/40 text-muted-foreground'
-                  }`}
-                >
-                  {state === 'current' ? 'Current' : state === 'done' ? 'Done ✓' : 'Queued'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                      state === 'current'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : state === 'done'
+                          ? 'border-green-600/30 bg-green-600/5 text-green-700'
+                          : 'border-border bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    {state === 'current' ? 'Current' : state === 'done' ? 'Done ✓' : 'Queued'}
+                  </span>
+                  {adjustMode && state === 'done' ? (
+                    <RedoPriorityButton
+                      sessionType="quarter"
+                      contextRef={contextRef}
+                      priorityId={p.id}
+                    />
+                  ) : null}
+                </div>
               </li>
             );
           })}

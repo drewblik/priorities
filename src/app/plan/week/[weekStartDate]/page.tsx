@@ -9,6 +9,7 @@ import { getEventsForDateRange } from '@/lib/events';
 import { getWeeklyPlanningQueue } from '@/lib/priorities';
 import { ensureCurrentQuarter, weeksInQuarter } from '@/lib/quarters';
 import { getQuarterWeekFocusForQuarter } from '@/lib/quarter-week-focus';
+import { isHorizonComplete } from '@/lib/replan';
 import { getTasksForDate } from '@/lib/tasks';
 import {
   daysInWeek,
@@ -16,18 +17,25 @@ import {
   weekRangeLabel,
   weekNumberWithinQuarter,
 } from '@/lib/week-utils';
+import { ReplanModePicker } from '../../ReplanModePicker';
 import { ChatPanel, type WeeklyChatPanelInitial } from './ChatPanel';
 import { EndSessionPlaceholder } from './EndSessionPlaceholder';
 import { QueuePanel } from './QueuePanel';
 import { WeekCalendar } from './WeekCalendar';
 
+type SearchParams = { [key: string]: string | string[] | undefined };
+
 export default async function WeeklyPlanPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ weekStartDate: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await requireUser();
   const { weekStartDate } = await params;
+  const sp = await searchParams;
+  const adjustMode = sp.mode === 'adjust';
 
   if (!isMondayInTz(weekStartDate, session.user.timezone)) notFound();
 
@@ -40,7 +48,16 @@ export default async function WeeklyPlanPage({
   const closedPriorityIds = new Set(
     closed.map((s) => s.priorityId).filter((v): v is string => !!v),
   );
-  const currentPriority = queue.find((p) => !closedPriorityIds.has(p.id)) ?? null;
+  const horizonComplete = await isHorizonComplete(
+    session.user.id,
+    'weekly',
+    weekStartDate,
+    queue.map((p) => p.id),
+  );
+  const currentPriority =
+    !horizonComplete || adjustMode
+      ? queue.find((p) => !closedPriorityIds.has(p.id)) ?? null
+      : null;
 
   // Snapshot data for WeekCalendar (always loaded).
   const week = daysInWeek(weekStartDate);
@@ -117,13 +134,23 @@ export default async function WeeklyPlanPage({
         </Link>
       </header>
 
+      {horizonComplete ? (
+        <ReplanModePicker
+          sessionType="weekly"
+          contextRef={weekStartDate}
+          adjustMode={adjustMode}
+        />
+      ) : null}
+
       <QueuePanel
         priorities={queue}
         currentPriorityId={currentPriority?.id ?? null}
         donePriorityIds={closedPriorityIds}
+        adjustMode={adjustMode}
+        contextRef={weekStartDate}
       />
 
-      <ChatPanel initial={initial} />
+      {horizonComplete && !adjustMode ? null : <ChatPanel initial={initial} />}
 
       <WeekCalendar
         weekStartISO={weekStartDate}
