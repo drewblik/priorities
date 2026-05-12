@@ -1,12 +1,13 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import Link from 'next/link';
 import { requireUser } from '@/auth';
-import { extractAssistantText, loadThread } from '@/lib/chat-messages';
+import { loadThread } from '@/lib/chat-messages';
 import { getOrCreateMasterSession } from '@/lib/chat-sessions';
 import {
   parseScreenContextFromPath,
   sanitizeFromPath,
 } from '@/lib/master-chat-screen-context';
+import { unpackMasterChatAssistantBlocks } from '@/lib/master-chat-tools';
 import { getPrioritiesForUser } from '@/lib/priorities';
 import { MasterChatPanel, type MasterChatInitial } from './MasterChatPanel';
 
@@ -32,13 +33,27 @@ export default async function MasterChatPage({
   const initialMessages = thread
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .slice(-40) // sensible cap; M17 adds proper scrollback pagination
-    .map((m): { role: 'user' | 'assistant'; text: string } => {
-      if (typeof m.content === 'string') {
-        return { role: m.role as 'user' | 'assistant', text: m.content };
-      }
-      const text = extractAssistantText(m.content as ContentBlockParam[]);
-      return { role: m.role as 'user' | 'assistant', text };
-    })
+    .map(
+      (m): { role: 'user' | 'assistant'; text: string; needsClarification?: boolean } => {
+        if (m.role === 'user') {
+          const text = typeof m.content === 'string'
+            ? m.content
+            : JSON.stringify(m.content);
+          return { role: 'user', text };
+        }
+        // Assistant rows in the master chat thread store the raw content
+        // array including the `submit_preview` tool_use block. Pull the
+        // display text + clarification flag from it.
+        const unpacked = unpackMasterChatAssistantBlocks(
+          m.content as ContentBlockParam[] | string,
+        );
+        return {
+          role: 'assistant',
+          text: unpacked.displayText,
+          needsClarification: unpacked.needsClarification,
+        };
+      },
+    )
     .filter((m) => m.text.trim().length > 0);
 
   // Build the priority lookup map the PreviewCard needs to colorize chips.

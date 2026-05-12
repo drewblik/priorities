@@ -23,6 +23,7 @@ import type { ScreenContext } from '@/lib/master-chat-screen-context';
 import {
   parseMasterChatResponse,
   SUBMIT_PREVIEW_TOOL,
+  unpackMasterChatAssistantBlocks,
 } from '@/lib/master-chat-tools';
 import { getPrioritiesForUser } from '@/lib/priorities';
 
@@ -165,13 +166,13 @@ export async function POST(req: Request) {
     // assistant turns into plain-text summaries before sending, preserving
     // the audit trail in chat_messages while keeping the API happy.
     const messagesForApi: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      ...existingThread.map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content:
+      ...existingThread.map((m) => {
+        const content =
           typeof m.content === 'string'
             ? m.content
-            : flattenMasterChatHistory(m.content as ContentBlockParam[]),
-      })),
+            : unpackMasterChatAssistantBlocks(m.content as ContentBlockParam[]).fullSummary;
+        return { role: m.role as 'user' | 'assistant', content };
+      }),
       { role: 'user', content: message },
     ];
 
@@ -234,48 +235,6 @@ export async function POST(req: Request) {
   }
 }
 
-/**
- * Turn a content array containing `submit_preview` tool_use blocks into a
- * plain-text summary suitable for Anthropic's `messages` API on subsequent
- * turns. Anthropic rejects tool_use blocks in history that aren't followed
- * by a tool_result block (which master chat doesn't produce — the tool
- * input IS the response).
- *
- * We extract `understanding` + `preview_summary` + a compact action list
- * from each tool_use input. Any plain text blocks are appended afterward.
- */
-function flattenMasterChatHistory(blocks: ContentBlockParam[]): string {
-  const parts: string[] = [];
-
-  for (const block of blocks) {
-    if (block.type === 'text') {
-      if (block.text.trim().length > 0) parts.push(block.text);
-      continue;
-    }
-    if (block.type === 'tool_use' && block.name === 'submit_preview') {
-      const input = (block.input ?? {}) as {
-        understanding?: string;
-        preview_summary?: string;
-        needs_clarification?: string;
-        proposed_actions?: Array<{ type?: string }>;
-      };
-      const segments: string[] = [];
-      if (input.understanding) segments.push(`Understanding: ${input.understanding}`);
-      if (input.preview_summary) segments.push(`Preview: ${input.preview_summary}`);
-      if (input.needs_clarification) {
-        segments.push(`Needs clarification: ${input.needs_clarification}`);
-      }
-      if (Array.isArray(input.proposed_actions) && input.proposed_actions.length > 0) {
-        const actionTypes = input.proposed_actions
-          .map((a) => (typeof a?.type === 'string' ? a.type : 'unknown'))
-          .join(', ');
-        segments.push(`Proposed actions: ${actionTypes}`);
-      }
-      if (segments.length > 0) parts.push(segments.join('\n'));
-    }
-    // Other block types (tool_result, etc.) shouldn't appear in master chat
-    // history. Skip silently.
-  }
-
-  return parts.join('\n\n') || '(empty)';
-}
+// History flattening moved to unpackMasterChatAssistantBlocks in
+// src/lib/master-chat-tools.ts so both this route AND the page hydration
+// share the same extraction logic.

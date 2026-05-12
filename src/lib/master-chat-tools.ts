@@ -1,4 +1,4 @@
-import type { Tool } from '@anthropic-ai/sdk/resources/messages';
+import type { ContentBlockParam, Tool } from '@anthropic-ai/sdk/resources/messages';
 
 /**
  * MasterChatResponse + ProposedAction shapes per TDD §636-654. The model
@@ -263,4 +263,80 @@ export function parseMasterChatResponse(
     return { ok: false, reason: 'preview_summary missing or not a string' };
   }
   return { ok: true, response: r as MasterChatResponse };
+}
+
+/**
+ * Unpack a persisted master-chat assistant content array (which contains
+ * the `submit_preview` tool_use block) into both a display-friendly text
+ * (for the chat panel) and a verbose history summary (for re-feeding to
+ * the Anthropic API on subsequent turns). Master chat assistant messages
+ * never have text blocks — the model's only output is the tool call —
+ * so plain text extraction returns empty; we have to dig into the tool
+ * input instead.
+ */
+export function unpackMasterChatAssistantBlocks(
+  blocks: ContentBlockParam[] | string,
+): {
+  displayText: string;
+  needsClarification: boolean;
+  fullSummary: string;
+} {
+  if (typeof blocks === 'string') {
+    return { displayText: blocks, needsClarification: false, fullSummary: blocks };
+  }
+
+  const toolUse = blocks.find(
+    (b): b is Extract<ContentBlockParam, { type: 'tool_use' }> =>
+      b.type === 'tool_use' && b.name === 'submit_preview',
+  );
+
+  if (!toolUse) {
+    // Fallback: collect any text blocks.
+    const text = blocks
+      .filter(
+        (b): b is Extract<ContentBlockParam, { type: 'text' }> => b.type === 'text',
+      )
+      .map((b) => b.text)
+      .join('');
+    return { displayText: text, needsClarification: false, fullSummary: text };
+  }
+
+  const input = (toolUse.input ?? {}) as {
+    understanding?: string;
+    preview_summary?: string;
+    needs_clarification?: string;
+    proposed_actions?: Array<{ type?: string }>;
+  };
+
+  const needsClarification = !!(
+    input.needs_clarification && input.needs_clarification.trim().length > 0
+  );
+
+  // Display text: needs_clarification wins; otherwise understanding;
+  // otherwise preview_summary; otherwise empty.
+  const displayText = needsClarification
+    ? input.needs_clarification ?? ''
+    : input.understanding ?? input.preview_summary ?? '';
+
+  // Full summary: stitched multi-line text for the model to read on
+  // subsequent turns. Captures the structure without leaking the
+  // disallowed tool_use block.
+  const segments: string[] = [];
+  if (input.understanding) segments.push(`Understanding: ${input.understanding}`);
+  if (input.preview_summary) segments.push(`Preview: ${input.preview_summary}`);
+  if (input.needs_clarification) {
+    segments.push(`Needs clarification: ${input.needs_clarification}`);
+  }
+  if (Array.isArray(input.proposed_actions) && input.proposed_actions.length > 0) {
+    const actionTypes = input.proposed_actions
+      .map((a) => (typeof a?.type === 'string' ? a.type : 'unknown'))
+      .join(', ');
+    segments.push(`Proposed actions: ${actionTypes}`);
+  }
+
+  return {
+    displayText,
+    needsClarification,
+    fullSummary: segments.join('\n') || '(empty)',
+  };
 }
