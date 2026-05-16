@@ -35,6 +35,10 @@ export async function getMemoryForPriority(
 export type CreateMemoryInput = {
   body: string;
   tags: string[];
+  /** Defaults to 'user'. M16+ master chat and M12+ planning chats override
+   *  to 'master_chat' or 'chatbot' respectively. The DB enum allows
+   *  user|chatbot|onboarding|master_chat per priorities-tdd.md:165. */
+  source?: 'user' | 'chatbot' | 'master_chat' | 'onboarding';
 };
 
 export async function createMemoryEntry(
@@ -52,7 +56,7 @@ export async function createMemoryEntry(
       priorityId,
       body: input.body,
       tags: input.tags,
-      source: 'user',
+      source: input.source ?? 'user',
     })
     .returning();
   return row ?? null;

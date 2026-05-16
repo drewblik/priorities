@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { MasterChatResponse } from '@/lib/master-chat-tools';
 import type { ScreenContext } from '@/lib/master-chat-screen-context';
@@ -15,6 +16,11 @@ export type MasterChatInitial = {
   }[];
   priorityById: Record<string, { name: string; color: string }>;
   screenContext: ScreenContext;
+  /** Pagination cursor for "Load older": the oldest message's createdAt
+   *  in the initial page. Null if there are no messages at all. */
+  oldestCreatedAt: string | null;
+  /** True iff there could be older messages beyond the initial page. */
+  hasMoreOlder: boolean;
 };
 
 type DisplayMessage = {
@@ -32,11 +38,20 @@ type Banner =
   | { tone: 'info'; message: string };
 
 export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<DisplayMessage[]>(() => initial.initialMessages);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<MasterChatResponse | null>(null);
+  const [previewGeneratedAt, setPreviewGeneratedAt] = useState<string | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
+  /** Pagination state for "Load older". Initial cursor is the oldest
+   *  message's createdAt; hasMore starts at whether the initial page was
+   *  full. */
+  const [olderCursor, setOlderCursor] = useState<string | null>(initial.oldestCreatedAt);
+  const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(initial.hasMoreOlder);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const priorityMap = new Map(
@@ -46,6 +61,44 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, preview, banner]);
+
+  async function loadOlder() {
+    if (loadingOlder || !hasMoreOlder || !olderCursor) return;
+    setLoadingOlder(true);
+    try {
+      const url = new URL('/api/chat/master/history', window.location.origin);
+      url.searchParams.set('before', olderCursor);
+      url.searchParams.set('limit', '40');
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { message?: string } | null;
+        setBanner({
+          tone: 'error',
+          message: j?.message ?? `Couldn't load older messages (${res.status}).`,
+        });
+        return;
+      }
+      const j = (await res.json()) as {
+        messages: DisplayMessage[];
+        hasMore: boolean;
+        nextBefore: string | null;
+      };
+      if (j.messages.length === 0) {
+        setHasMoreOlder(false);
+        return;
+      }
+      setMessages((prev) => [...j.messages, ...prev]);
+      setOlderCursor(j.nextBefore);
+      setHasMoreOlder(j.hasMore);
+    } catch (err) {
+      setBanner({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'history fetch failed',
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -87,9 +140,11 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
       const j = (await res.json()) as {
         ok: boolean;
         response: MasterChatResponse;
+        preview_generated_at?: string;
       };
 
       const r = j.response;
+      setPreviewGeneratedAt(j.preview_generated_at ?? null);
 
       // needs_clarification → render as a regular assistant text bubble with
       // a "needs clarification" badge; no preview card.
@@ -132,13 +187,63 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
 
   function cancelPreview() {
     setPreview(null);
+    setPreviewGeneratedAt(null);
   }
 
-  function confirmStub() {
-    setBanner({
-      tone: 'info',
-      message: 'Confirm execution lands in M17. For now, Cancel and re-do via Priority Detail.',
-    });
+  async function confirmPreview() {
+    if (!preview || !previewGeneratedAt || confirming) return;
+    setConfirming(true);
+    setBanner(null);
+    try {
+      const res = await fetch('/api/chat/master/confirm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          preview_generated_at: previewGeneratedAt,
+          response: preview,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+          failed_action_index?: number;
+        } | null;
+        const detail =
+          typeof j?.failed_action_index === 'number'
+            ? ` (action #${j.failed_action_index + 1})`
+            : '';
+        setBanner({
+          tone: 'error',
+          message: `${j?.message ?? `Confirm failed (${res.status}).`}${detail}`,
+        });
+        return;
+      }
+      const j = (await res.json()) as {
+        ok: boolean;
+        executed: Array<{ type: string; entity_id: string | null }>;
+      };
+      const count = j.executed.length;
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `✅ Saved ${count} action${count === 1 ? '' : 's'}.`,
+        },
+      ]);
+      setPreview(null);
+      setPreviewGeneratedAt(null);
+      // Pre-warm any source page (e.g., DayCalendar) so the user sees the
+      // new data when they navigate back.
+      router.refresh();
+    } catch (err) {
+      setBanner({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'confirm failed',
+      });
+    } finally {
+      setConfirming(false);
+    }
   }
 
   return (
@@ -159,6 +264,19 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
       ) : null}
 
       <ul className="space-y-3">
+        {hasMoreOlder && olderCursor ? (
+          <li className="flex justify-center">
+            <button
+              type="button"
+              onClick={loadOlder}
+              disabled={loadingOlder}
+              className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+            >
+              {loadingOlder ? 'Loading…' : '↑ Load older'}
+            </button>
+          </li>
+        ) : null}
+
         {messages.length === 0 ? (
           <li className="rounded-md bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap">
             Ask the council anything. Examples:
@@ -199,7 +317,8 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
           preview={preview}
           priorityById={priorityMap}
           onCancel={cancelPreview}
-          onConfirmStub={confirmStub}
+          onConfirm={confirmPreview}
+          busy={confirming}
         />
       ) : null}
 
