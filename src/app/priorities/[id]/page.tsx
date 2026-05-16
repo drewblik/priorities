@@ -50,7 +50,28 @@ export default async function PriorityDetailPage({
   if (!priority) notFound();
 
   const sp = await searchParams;
+  const showArchivedMemory = sp.archived_memory === '1';
   const toast = (() => {
+    if (typeof sp.memory_compressed === 'string') {
+      return {
+        tone: 'success' as const,
+        message: `Memory compressed — ${sp.memory_compressed} entr${
+          sp.memory_compressed === '1' ? 'y' : 'ies'
+        } folded into the pinned summary.`,
+      };
+    }
+    if (sp.memory_note === 'nothing_to_archive') {
+      return {
+        tone: 'success' as const,
+        message: 'Nothing to compress — 10 or fewer entries.',
+      };
+    }
+    if (sp.memory_note === 'summarize_in_progress') {
+      return {
+        tone: 'success' as const,
+        message: 'A compression is already running for this Priority.',
+      };
+    }
     for (const key of Object.keys(TOAST_COPY)) {
       if (sp[key] === '1') return TOAST_COPY[key];
     }
@@ -106,7 +127,11 @@ export default async function PriorityDetailPage({
           userTimezone={session.user.timezone}
         />
 
-        <MemorySection userId={session.user.id} priorityId={id} />
+        <MemorySection
+          userId={session.user.id}
+          priorityId={id}
+          showArchived={showArchivedMemory}
+        />
 
         <FilesSection userId={session.user.id} priorityId={id} />
 

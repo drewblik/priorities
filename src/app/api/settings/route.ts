@@ -54,6 +54,7 @@ const VALID_REDIRECTS = new Set([
   '/settings/api-key',
   '/settings/calendar',
   '/settings/planning',
+  '/settings/cost',
   '/settings/data',
 ]);
 

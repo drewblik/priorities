@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { CostCapBanner } from './CostCapBanner';
 import { MasterChatButton } from './MasterChatButton';
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-background text-foreground antialiased">
+        <CostCapBanner />
         {children}
         <MasterChatButton />
       </body>

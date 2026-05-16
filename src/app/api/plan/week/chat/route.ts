@@ -22,6 +22,7 @@ import { recordCallCost, withinCostCap } from '@/lib/cost-cap';
 import { acquireLock, releaseLock } from '@/lib/generation-locks';
 import { getPriorityById, getWeeklyPlanningQueue } from '@/lib/priorities';
 import { getMemoryForPriority } from '@/lib/priority-memory';
+import { maybeSummarizeOnSessionStart } from '@/lib/memory-summarize';
 import { ensureCurrentQuarter } from '@/lib/quarters';
 import { getSettingsView } from '@/lib/settings';
 import { encodeSseEvent, SSE_HEADERS, type SseEvent } from '@/lib/sse';
@@ -137,6 +138,7 @@ export async function POST(req: Request) {
 
   // Build system prompt with weekly context.
   const weekNumber = weekNumberWithinQuarter(weekStartISO, quarter);
+  await maybeSummarizeOnSessionStart(userId, priority.id);
   const recentMemory = (await getMemoryForPriority(userId, priority.id)).slice(0, 10);
 
   // "Earlier priorities" = those before current in the queue. We pass IDs

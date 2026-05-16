@@ -15,7 +15,8 @@ const TABS: Tab[] = [
   { href: '/settings/api-key', label: 'API Key', enabled: true },
   { href: '/settings/calendar', label: 'Calendar', enabled: true },
   { href: '/settings/planning', label: 'Planning', enabled: true },
-  { href: '/settings/data', label: 'Data', enabled: false, comingIn: 'M19' },
+  { href: '/settings/cost', label: 'Cost & Usage', enabled: true },
+  { href: '/settings/data', label: 'Data', enabled: true },
 ];
 
 export function SettingsTabs() {
