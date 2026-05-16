@@ -7,6 +7,8 @@ import {
   weekNumber,
   weeksInQuarter,
 } from '@/lib/quarters';
+import { hasUnplannedNewPriorities } from '@/lib/onboarding';
+import { MidCyclePriorityBanner } from '../MidCyclePriorityBanner';
 import { PrioritiesList } from './PrioritiesList';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
@@ -26,9 +28,10 @@ export default async function CouncilHomePage({
   const session = await requireUser();
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const [all, quarter] = await Promise.all([
+  const [all, quarter, showMidCycle] = await Promise.all([
     getPrioritiesForUser(session.user.id, { includeArchived: showArchived }),
     ensureCurrentQuarter(session.user.id, session.user.timezone),
+    hasUnplannedNewPriorities(session.user.id),
   ]);
 
   const todayISO = currentDateInTz(session.user.timezone);
@@ -100,6 +103,10 @@ export default async function CouncilHomePage({
           </form>
         </div>
       </header>
+
+      <div className="mt-4">
+        <MidCyclePriorityBanner show={showMidCycle} />
+      </div>
 
       {toast ? (
         <div
