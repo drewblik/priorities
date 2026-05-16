@@ -9,9 +9,10 @@ import { PriorityCard } from './PriorityCard';
 
 type Props = {
   priority: Priority;
+  scheduledMinutes?: number;
 };
 
-export function SortablePriorityCard({ priority }: Props) {
+export function SortablePriorityCard({ priority, scheduledMinutes = 0 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: priority.id,
   });
@@ -55,7 +56,7 @@ export function SortablePriorityCard({ priority }: Props) {
           {...attributes}
           {...listeners}
         >
-          <PriorityCard priority={priority} />
+          <PriorityCard priority={priority} scheduledMinutes={scheduledMinutes} />
         </div>
         <button
           ref={kebabRef}

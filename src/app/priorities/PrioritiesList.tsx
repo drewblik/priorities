@@ -20,9 +20,11 @@ import { SortablePriorityCard } from './SortablePriorityCard';
 
 type Props = {
   initial: Priority[];
+  /** Scheduled minutes this week per priority id (M20 weekly tracking). */
+  scheduledMinutes?: Record<string, number>;
 };
 
-export function PrioritiesList({ initial }: Props) {
+export function PrioritiesList({ initial, scheduledMinutes = {} }: Props) {
   const [items, setItems] = useState<Priority[]>(initial);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,7 +103,11 @@ export function PrioritiesList({ initial }: Props) {
         >
           <ul className="space-y-2">
             {items.map((priority) => (
-              <SortablePriorityCard key={priority.id} priority={priority} />
+              <SortablePriorityCard
+                key={priority.id}
+                priority={priority}
+                scheduledMinutes={scheduledMinutes[priority.id] ?? 0}
+              />
             ))}
           </ul>
         </SortableContext>

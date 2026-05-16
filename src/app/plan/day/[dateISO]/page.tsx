@@ -2,6 +2,7 @@ import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/auth';
+import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { extractAssistantText, loadThread } from '@/lib/chat-messages';
 import { getClosedSessions, getOrCreateSession } from '@/lib/chat-sessions';
 import { loadDayCalendarSnapshot } from '@/lib/daily-context';
@@ -40,6 +41,7 @@ export default async function DailyPlanPage({
   searchParams: Promise<SearchParams>;
 }) {
   const session = await requireUser();
+  await syncDueFeedsForUser(session.user.id);
   const { dateISO } = await params;
   if (!isIsoDate(dateISO)) notFound();
 
