@@ -6,6 +6,18 @@ export type CouncilEntry = Pick<
   'id' | 'name' | 'icon' | 'smartGoal' | 'pinnedSummary'
 >;
 
+/** Compact entity reference so the model can resolve "the foam rolling
+ *  session" → a concrete task_id / event_id for modify_/complete_ actions.
+ *  Without this the model emits "<UNKNOWN>" and confirm fails. */
+export type EntityRef = {
+  kind: 'task' | 'event';
+  id: string;
+  title: string;
+  priorityName: string;
+  /** Human-ish date/status hint to disambiguate same-titled items. */
+  detail: string;
+};
+
 export type BuildMasterChatSystemPromptInput = {
   council: CouncilEntry[];
   screenContext: ScreenContext;
@@ -13,6 +25,8 @@ export type BuildMasterChatSystemPromptInput = {
    *  by the caller. Used for the "Conversation history with master chat:"
    *  block per Prompt 7. */
   recentMessages: { role: 'user' | 'assistant'; text: string }[];
+  /** Active tasks + upcoming/recent events with IDs. Capped by the caller. */
+  entityRefs: EntityRef[];
   newUserMessage: string;
 };
 
@@ -41,11 +55,23 @@ export function buildMasterChatSystemPrompt(input: BuildMasterChatSystemPromptIn
 
   const screenContextJson = JSON.stringify(input.screenContext, null, 2);
 
+  const entityLines = input.entityRefs.map(
+    (e) =>
+      `- ${e.kind} id=${e.id} · "${e.title}" · ${e.priorityName} · ${e.detail}`,
+  );
+  const entityBlock =
+    entityLines.length > 0
+      ? entityLines.join('\n')
+      : '(no active tasks or upcoming events)';
+
   return [
     `You are the master chat router for Priorities, a life-management app. The user is messaging you about something happening in their life. Your job is to figure out which of their Priorities (chatbot personas) should be updated and propose specific actions.`,
     '',
     `User's council (Priorities):`,
     councilBlock,
+    '',
+    `User's existing tasks & events (use these exact ids for modify_task / complete_task / modify_event — NEVER invent or placeholder an id):`,
+    entityBlock,
     '',
     `User's current screen context:`,
     screenContextJson,
@@ -83,5 +109,6 @@ export function buildMasterChatSystemPrompt(input: BuildMasterChatSystemPromptIn
     `- The screen context includes current_date (today, YYYY-MM-DD) and timezone. ALWAYS resolve relative date references ("tomorrow", "next week", "this Friday", "in 3 days") into a concrete YYYY-MM-DD before putting them in any action. NEVER emit placeholders like "tomorrow", "next week", or "<UNKNOWN>" in target_date / start_time / end_time / time_block_* — those are rejected and the whole batch fails.`,
     `- Datetime fields (start_time, end_time, time_block_*) must be YYYY-MM-DDTHH:mm in the user's local timezone.`,
     `- If the user's request implies a date you genuinely can't resolve even with current_date, set needs_clarification and ask, instead of guessing or using a placeholder.`,
+    `- For modify_task / complete_task / modify_event: the task_id / event_id MUST be one of the exact ids from the "existing tasks & events" list above. If the user refers to something that isn't in that list, set needs_clarification and ask which item — do NOT emit "<UNKNOWN>" or a made-up id.`,
   ].join('\n');
 }

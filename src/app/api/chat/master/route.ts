@@ -1,8 +1,11 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { formatInTimeZone } from 'date-fns-tz';
+import { and, desc, eq, gte, isNull, lte } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentSession } from '@/auth';
+import { db } from '@/db/client';
+import { events as eventsTable, tasks as tasksTable } from '@/db/schema';
 import { getClientForUser } from '@/lib/anthropic-client';
 import {
   estimateInputTokensFromText,
@@ -19,6 +22,7 @@ import { acquireLock, releaseLock } from '@/lib/generation-locks';
 import {
   buildMasterChatSystemPrompt,
   type CouncilEntry,
+  type EntityRef,
 } from '@/lib/master-chat-prompt';
 import type { ScreenContext } from '@/lib/master-chat-screen-context';
 import {
@@ -99,6 +103,58 @@ export async function POST(req: Request) {
       pinnedSummary: p.pinnedSummary,
     }));
 
+  // Entity reference list so the model can resolve "the foam rolling
+  // session" → a real task_id / event_id for modify_/complete_ actions.
+  // Bounded: open/recent tasks + upcoming events for active priorities.
+  const priorityNameById = new Map(allPriorities.map((p) => [p.id, p.name]));
+  const todayISO = formatInTimeZone(now, tz, 'yyyy-MM-dd');
+  const horizonStartUtc = new Date(now.getTime() - 7 * 86_400_000);
+  const horizonEndUtc = new Date(now.getTime() + 60 * 86_400_000);
+  const [taskRows, eventRows] = await Promise.all([
+    db
+      .select()
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.userId, userId),
+          isNull(tasksTable.deletedAt),
+          eq(tasksTable.status, 'open'),
+        ),
+      )
+      .orderBy(desc(tasksTable.createdAt))
+      .limit(50),
+    db
+      .select()
+      .from(eventsTable)
+      .where(
+        and(
+          eq(eventsTable.userId, userId),
+          isNull(eventsTable.deletedAt),
+          gte(eventsTable.startTime, horizonStartUtc),
+          lte(eventsTable.startTime, horizonEndUtc),
+        ),
+      )
+      .orderBy(desc(eventsTable.startTime))
+      .limit(50),
+  ]);
+  void todayISO;
+  const entityRefs: EntityRef[] = [
+    ...taskRows.map((t): EntityRef => ({
+      kind: 'task',
+      id: t.id,
+      title: t.title,
+      priorityName: priorityNameById.get(t.ownerPriorityId) ?? '(unknown priority)',
+      detail: t.targetDate ? `date ${t.targetDate}` : 'no date · open',
+    })),
+    ...eventRows.map((e): EntityRef => ({
+      kind: 'event',
+      id: e.id,
+      title: e.title,
+      priorityName: priorityNameById.get(e.ownerPriorityId) ?? '(unknown priority)',
+      detail: formatInTimeZone(e.startTime, tz, "EEE LLL d, h:mm a"),
+    })),
+  ];
+
   // Cost gate (estimate before lock so we fail fast).
   const existingThread = await loadThread(chatSession.id);
   let estimatedInputTokens = estimateInputTokensFromText(message);
@@ -173,6 +229,7 @@ export async function POST(req: Request) {
       council,
       screenContext: screen_context,
       recentMessages,
+      entityRefs,
       newUserMessage: message,
     });
 

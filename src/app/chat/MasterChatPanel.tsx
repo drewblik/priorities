@@ -190,8 +190,25 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
     setPreviewGeneratedAt(null);
   }
 
+  // Append a result bubble to the thread so feedback lands where the user
+  // is looking (auto-scrolls via the endRef effect) rather than only as a
+  // top-of-panel banner that's off-screen on a long thread.
+  function pushResultBubble(text: string) {
+    setMessages((prev) => [...prev, { role: 'assistant', text }]);
+  }
+
   async function confirmPreview() {
-    if (!preview || !previewGeneratedAt || confirming) return;
+    if (confirming) return;
+    if (!preview) return;
+    if (!previewGeneratedAt) {
+      // Defensive: never silently no-op. This shouldn't happen for a
+      // freshly-generated preview, but if it does, tell the user.
+      pushResultBubble(
+        '⚠️ This preview is stale (lost its timestamp). Send your message again to get a fresh one.',
+      );
+      setPreview(null);
+      return;
+    }
     setConfirming(true);
     setBanner(null);
     try {
@@ -213,10 +230,11 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
           typeof j?.failed_action_index === 'number'
             ? ` (action #${j.failed_action_index + 1})`
             : '';
-        setBanner({
-          tone: 'error',
-          message: `${j?.message ?? `Confirm failed (${res.status}).`}${detail}`,
-        });
+        // Surface both as a banner AND a thread bubble so it's visible
+        // regardless of scroll position.
+        const msg = `⚠️ ${j?.message ?? `Confirm failed (${res.status}).`}${detail}`;
+        setBanner({ tone: 'error', message: msg });
+        pushResultBubble(msg);
         return;
       }
       const j = (await res.json()) as {
@@ -224,23 +242,16 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
         executed: Array<{ type: string; entity_id: string | null }>;
       };
       const count = j.executed.length;
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: `✅ Saved ${count} action${count === 1 ? '' : 's'}.`,
-        },
-      ]);
+      pushResultBubble(`✅ Saved ${count} action${count === 1 ? '' : 's'}.`);
       setPreview(null);
       setPreviewGeneratedAt(null);
       // Pre-warm any source page (e.g., DayCalendar) so the user sees the
       // new data when they navigate back.
       router.refresh();
     } catch (err) {
-      setBanner({
-        tone: 'error',
-        message: err instanceof Error ? err.message : 'confirm failed',
-      });
+      const msg = err instanceof Error ? err.message : 'confirm failed';
+      setBanner({ tone: 'error', message: msg });
+      pushResultBubble(`⚠️ ${msg}`);
     } finally {
       setConfirming(false);
     }
