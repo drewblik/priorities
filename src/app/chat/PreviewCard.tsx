@@ -7,6 +7,9 @@ type Props = {
   /** Map of priority id → { name, color } used to render the affected_priorities
    *  chips with their actual color. */
   priorityById: Map<string, { name: string; color: string }>;
+  /** id → { kind, title } for tasks/events so modify_/complete_ rows show
+   *  the human title instead of a raw task_xxx id. */
+  entityById?: Record<string, { kind: 'task' | 'event'; title: string }>;
   onCancel: () => void;
   /** Real Confirm handler (M17). Posts the preview back to the server,
    *  which validates + executes the proposed actions atomically. */
@@ -15,7 +18,37 @@ type Props = {
   busy?: boolean;
 };
 
-export function PreviewCard({ preview, priorityById, onCancel, onConfirm, busy = false }: Props) {
+const FIELD_LABELS: Record<string, string> = {
+  target_date: 'date',
+  time_block_start: 'start',
+  time_block_end: 'end',
+  start_time: 'start',
+  end_time: 'end',
+  completion_status: 'status',
+  title: 'title',
+  description: 'description',
+};
+
+function describeChanges(changes: Record<string, unknown>): string {
+  const parts = Object.entries(changes)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => {
+      const label = FIELD_LABELS[k] ?? k;
+      const val = v === null ? 'cleared' : String(v);
+      return `${label} → ${val}`;
+    });
+  return parts.length > 0 ? parts.join(', ') : 'no changes';
+}
+
+export function PreviewCard({
+  preview,
+  priorityById,
+  entityById = {},
+  onCancel,
+  onConfirm,
+  busy = false,
+}: Props) {
+  const entityTitle = (id: string): string => entityById[id]?.title ?? id;
   return (
     <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4">
       <div>
@@ -59,7 +92,7 @@ export function PreviewCard({ preview, priorityById, onCancel, onConfirm, busy =
               key={i}
               className="rounded-md border border-border bg-background px-3 py-2 text-sm"
             >
-              <ActionRow action={a} priorityById={priorityById} />
+              <ActionRow action={a} priorityById={priorityById} entityTitle={entityTitle} />
             </li>
           ))}
         </ul>
@@ -94,9 +127,11 @@ export function PreviewCard({ preview, priorityById, onCancel, onConfirm, busy =
 function ActionRow({
   action,
   priorityById,
+  entityTitle,
 }: {
   action: ProposedAction;
   priorityById: Map<string, { name: string; color: string }>;
+  entityTitle: (id: string) => string;
 }) {
   const badge = (
     <span className="mr-2 inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -157,11 +192,9 @@ function ActionRow({
     return (
       <div>
         {badge}
-        <p className="mt-1 text-sm">
-          Task <span className="font-mono text-xs">{action.task_id}</span>
-        </p>
+        <p className="mt-1 text-sm font-medium">{entityTitle(action.task_id)}</p>
         <p className="text-[11px] text-muted-foreground">
-          changes: {Object.keys(action.changes).join(', ') || '(none)'}
+          {describeChanges(action.changes as Record<string, unknown>)}
         </p>
       </div>
     );
@@ -172,7 +205,7 @@ function ActionRow({
       <div>
         {badge}
         <p className="mt-1 text-sm">
-          Mark task <span className="font-mono text-xs">{action.task_id}</span> complete.
+          Mark <span className="font-medium">{entityTitle(action.task_id)}</span> complete.
         </p>
       </div>
     );
@@ -198,11 +231,9 @@ function ActionRow({
     return (
       <div>
         {badge}
-        <p className="mt-1 text-sm">
-          Event <span className="font-mono text-xs">{action.event_id}</span>
-        </p>
+        <p className="mt-1 text-sm font-medium">{entityTitle(action.event_id)}</p>
         <p className="text-[11px] text-muted-foreground">
-          changes: {Object.keys(action.changes).join(', ') || '(none)'}
+          {describeChanges(action.changes as Record<string, unknown>)}
         </p>
       </div>
     );

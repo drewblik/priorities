@@ -300,6 +300,13 @@ export async function POST(req: Request) {
        *  enforce the 5-minute preview expiry per TDD §679. M17 reads this
        *  in the confirm route. */
       preview_generated_at: new Date().toISOString(),
+      /** Slim id→title map so the preview card can render task/event
+       *  titles instead of raw ids for modify_/complete_ actions. */
+      entity_refs: entityRefs.map((e) => ({
+        kind: e.kind,
+        id: e.id,
+        title: e.title,
+      })),
       usage: {
         input_tokens: completion.usage.input_tokens,
         output_tokens: completion.usage.output_tokens,

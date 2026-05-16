@@ -45,6 +45,9 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
   const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<MasterChatResponse | null>(null);
   const [previewGeneratedAt, setPreviewGeneratedAt] = useState<string | null>(null);
+  const [entityById, setEntityById] = useState<
+    Record<string, { kind: 'task' | 'event'; title: string }>
+  >({});
   const [banner, setBanner] = useState<Banner | null>(null);
   /** Pagination state for "Load older". Initial cursor is the oldest
    *  message's createdAt; hasMore starts at whether the initial page was
@@ -141,10 +144,16 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
         ok: boolean;
         response: MasterChatResponse;
         preview_generated_at?: string;
+        entity_refs?: { kind: 'task' | 'event'; id: string; title: string }[];
       };
 
       const r = j.response;
       setPreviewGeneratedAt(j.preview_generated_at ?? null);
+      if (Array.isArray(j.entity_refs)) {
+        const map: Record<string, { kind: 'task' | 'event'; title: string }> = {};
+        for (const e of j.entity_refs) map[e.id] = { kind: e.kind, title: e.title };
+        setEntityById(map);
+      }
 
       // needs_clarification → render as a regular assistant text bubble with
       // a "needs clarification" badge; no preview card.
@@ -327,6 +336,7 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
         <PreviewCard
           preview={preview}
           priorityById={priorityMap}
+          entityById={entityById}
           onCancel={cancelPreview}
           onConfirm={confirmPreview}
           busy={confirming}
