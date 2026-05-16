@@ -123,6 +123,15 @@ Career, Money, Personal Growth candidates:
 - Budget Tracker
 - Reading List Manager
 
+### M21 (v1.1) — Calendar-authoritative planning, part 2 (owner-requested, scoped after M20)
+
+The owner relies on a work-calendar .ics feed and needs it to take hard precedence over Priority scheduling. M20 folds in the cheap/low-risk parts (sync-before-plan freshness + a read-only conflict banner). These two pieces are the meatier, decision-bearing follow-ups, slotted as M21/v1.1:
+
+1. **Accepted-only meeting filter.** An .ics feed usually contains every event regardless of RSVP. To block only meetings the user accepted we need: a per-feed "calendar email" field, ical.js `ATTENDEE` `PARTSTAT` parsing for that email, and a policy for `TENTATIVE`/`NEEDS-ACTION` (block / ignore / soft-yellow — owner to decide). **Open unknown:** some feeds (Outlook publish, non-attendee Google calendars) don't expose per-user PARTSTAT — accepted-only is best-effort, must be validated against the owner's real work feed first. Concrete next step: after M20's sync-before-plan ships, owner adds their real work calendar and reports what shows up; that data drives the M21 filter design.
+2. **Mid-day drift → Master Chat resolve flow.** M20 ships *detection + banner* only. M21 adds the resolve action: route detected conflicts into Master Chat (M16/17) pre-seeded with "these blocks now overlap calendar events — propose moves," using the existing modify/reschedule + confirm-preview machinery.
+
+**Owner explicitly wants real notifications later** (a buzz/ping when calendar drift creates conflicts, not just an in-app banner on next open). True push is a Phase-2 platform item (see "Push notifications" below) and is the eventual delivery channel for the M21 conflict-resolution nudge.
+
 ### Platform improvements (post-v1.0)
 
 - Sub-app contract implementation (when first sub-app gets built)
@@ -132,7 +141,7 @@ Career, Money, Personal Growth candidates:
 - Master chat undo for confirmed actions
 - Smart memory summarization beyond the threshold-based pattern (RAG with vector embeddings)
 - Native iOS/Android via React Native (Phase 2 stack rebuild)
-- Push notifications
+- Push notifications **(owner-requested; eventual delivery channel for the M21 calendar-conflict nudge — "I will want notifications like this later on")**
 - Item dedup across Priorities
 - Bi-directional calendar sync (write back to Outlook/Google via OAuth)
 - Yearly horizon visualizations (yearly notes already captured in v1)
