@@ -2,10 +2,21 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { CostCapBanner } from './CostCapBanner';
 import { MasterChatButton } from './MasterChatButton';
+import { ServiceWorkerRegistrar } from './ServiceWorkerRegistrar';
 
 export const metadata: Metadata = {
   title: 'Priorities',
   description: 'Your priorities, planned by their advocates.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Priorities',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export const viewport: Viewport = {
@@ -26,6 +37,7 @@ export default function RootLayout({
         <CostCapBanner />
         {children}
         <MasterChatButton />
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

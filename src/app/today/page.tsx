@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
+import { countCalendarConflicts } from '@/lib/calendar-conflicts';
+import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { hasUnplannedNewPriorities } from '@/lib/onboarding';
 import { currentDateInTz } from '@/lib/quarters';
+import { ConflictBanner } from '../ConflictBanner';
 import { MidCyclePriorityBanner } from '../MidCyclePriorityBanner';
 import { fetchDailyData } from './dailyDataFetch';
 import { DailyTimeline } from './DailyTimeline';
@@ -45,11 +48,15 @@ export default async function TodayPage({
   const sp = await searchParams;
 
   const tz = session.user.timezone;
+  await syncDueFeedsForUser(session.user.id);
   const todayISO = currentDateInTz(tz);
   const dateISO = pickDate(sp, todayISO);
 
   const data = await fetchDailyData(session.user.id, dateISO, tz);
-  const showMidCycle = await hasUnplannedNewPriorities(session.user.id);
+  const [showMidCycle, conflictCount] = await Promise.all([
+    hasUnplannedNewPriorities(session.user.id),
+    countCalendarConflicts(session.user.id, tz),
+  ]);
 
   const toast = (() => {
     for (const key of Object.keys(TOAST_COPY)) {
@@ -110,6 +117,7 @@ export default async function TodayPage({
         </div>
       </header>
 
+      <ConflictBanner count={conflictCount} />
       <MidCyclePriorityBanner show={showMidCycle} />
 
       <DateNavigator currentISO={dateISO} todayISO={todayISO} />

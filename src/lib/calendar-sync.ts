@@ -258,3 +258,43 @@ export async function syncDueFeeds(): Promise<{ syncedFeeds: number; errors: num
 
 // Suppress unused-import warning if `gt` ever becomes unused after refactor.
 void gt;
+
+/**
+ * M20 sync-before-plan: refresh THIS user's feeds whose `last_synced_at`
+ * is null or older than `maxAgeMin`. Bounded + throttled so opening a
+ * plan/Today page is calendar-correct without re-fetching on every load.
+ * External calendar events take hard precedence over Priority scheduling,
+ * so plan pages call this before computing queue/conflict context.
+ * Best-effort: a feed fetch failure is logged, never thrown.
+ */
+export async function syncDueFeedsForUser(
+  userId: string,
+  maxAgeMin = 5,
+): Promise<{ syncedFeeds: number; errors: number }> {
+  const dueRows = await db
+    .select()
+    .from(calendarFeedConfigs)
+    .where(
+      and(
+        eq(calendarFeedConfigs.userId, userId),
+        isNull(calendarFeedConfigs.deletedAt),
+        sql`(${calendarFeedConfigs.lastSyncedAt} IS NULL
+             OR ${calendarFeedConfigs.lastSyncedAt} + (${maxAgeMin}::int * INTERVAL '1 minute') <= NOW())`,
+      ),
+    );
+
+  let errors = 0;
+  for (const config of dueRows) {
+    try {
+      const result = await syncFeed(config);
+      if (!result.success) errors += 1;
+    } catch (err) {
+      errors += 1;
+      console.error(
+        `syncDueFeedsForUser: syncFeed crashed for config=${config.id}:`,
+        err instanceof Error ? `${err.name}: ${err.message}` : err,
+      );
+    }
+  }
+  return { syncedFeeds: dueRows.length, errors };
+}

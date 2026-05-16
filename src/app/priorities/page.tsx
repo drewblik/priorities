@@ -7,7 +7,11 @@ import {
   weekNumber,
   weeksInQuarter,
 } from '@/lib/quarters';
+import { countCalendarConflicts } from '@/lib/calendar-conflicts';
+import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { hasUnplannedNewPriorities } from '@/lib/onboarding';
+import { getScheduledMinutesThisWeek } from '@/lib/weekly-tracking';
+import { ConflictBanner } from '../ConflictBanner';
 import { MidCyclePriorityBanner } from '../MidCyclePriorityBanner';
 import { PrioritiesList } from './PrioritiesList';
 
@@ -28,11 +32,15 @@ export default async function CouncilHomePage({
   const session = await requireUser();
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const [all, quarter, showMidCycle] = await Promise.all([
-    getPrioritiesForUser(session.user.id, { includeArchived: showArchived }),
-    ensureCurrentQuarter(session.user.id, session.user.timezone),
-    hasUnplannedNewPriorities(session.user.id),
-  ]);
+  await syncDueFeedsForUser(session.user.id);
+  const [all, quarter, showMidCycle, conflictCount, scheduledMinutes] =
+    await Promise.all([
+      getPrioritiesForUser(session.user.id, { includeArchived: showArchived }),
+      ensureCurrentQuarter(session.user.id, session.user.timezone),
+      hasUnplannedNewPriorities(session.user.id),
+      countCalendarConflicts(session.user.id, session.user.timezone),
+      getScheduledMinutesThisWeek(session.user.id, session.user.timezone),
+    ]);
 
   const todayISO = currentDateInTz(session.user.timezone);
   const totalWeeks = weeksInQuarter(quarter.startDate, quarter.endDate);
@@ -104,7 +112,8 @@ export default async function CouncilHomePage({
         </div>
       </header>
 
-      <div className="mt-4">
+      <div className="mt-4 space-y-2">
+        <ConflictBanner count={conflictCount} />
         <MidCyclePriorityBanner show={showMidCycle} />
       </div>
 
@@ -135,7 +144,11 @@ export default async function CouncilHomePage({
       </div>
 
       <section className="mt-3">
-        <PrioritiesList key={showArchived ? 'archived' : 'active'} initial={all} />
+        <PrioritiesList
+          key={showArchived ? 'archived' : 'active'}
+          initial={all}
+          scheduledMinutes={scheduledMinutes}
+        />
       </section>
 
       <div className="mt-6 flex justify-center">

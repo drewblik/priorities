@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/auth';
+import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { loadThread, extractAssistantText } from '@/lib/chat-messages';
 import { getClosedSessions, getOrCreateSession } from '@/lib/chat-sessions';
 import { getQuarterlyPlanningQueue } from '@/lib/priorities';
@@ -24,6 +25,7 @@ export default async function QuarterPlanPage({
   searchParams: Promise<SearchParams>;
 }) {
   const session = await requireUser();
+  await syncDueFeedsForUser(session.user.id);
   const { quarterId } = await params;
   const sp = await searchParams;
   const adjustMode = sp.mode === 'adjust';
