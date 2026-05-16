@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
+import { hasUnplannedNewPriorities } from '@/lib/onboarding';
 import { currentDateInTz } from '@/lib/quarters';
+import { MidCyclePriorityBanner } from '../MidCyclePriorityBanner';
 import { fetchDailyData } from './dailyDataFetch';
 import { DailyTimeline } from './DailyTimeline';
 import { DateNavigator } from './DateNavigator';
@@ -47,6 +49,7 @@ export default async function TodayPage({
   const dateISO = pickDate(sp, todayISO);
 
   const data = await fetchDailyData(session.user.id, dateISO, tz);
+  const showMidCycle = await hasUnplannedNewPriorities(session.user.id);
 
   const toast = (() => {
     for (const key of Object.keys(TOAST_COPY)) {
@@ -106,6 +109,8 @@ export default async function TodayPage({
           </form>
         </div>
       </header>
+
+      <MidCyclePriorityBanner show={showMidCycle} />
 
       <DateNavigator currentISO={dateISO} todayISO={todayISO} />
 

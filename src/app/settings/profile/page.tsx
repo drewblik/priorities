@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { getSettingsView } from '@/lib/settings';
 
@@ -80,6 +81,20 @@ export default async function ProfileSettingsPage({
           {errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
         </div>
       </form>
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <h3 className="text-sm font-medium">Onboarding</h3>
+        <p className="text-xs text-muted-foreground">
+          Re-run the Onboarding Coach interview. Your current council stays
+          until you review the new proposal and choose to add or replace.
+        </p>
+        <Link
+          href="/onboarding?restart=1"
+          className="inline-block rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+        >
+          Restart Onboarding Interview
+        </Link>
+      </div>
     </section>
   );
 }
