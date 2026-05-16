@@ -29,6 +29,7 @@ import {
 import { acquireLock, releaseLock } from '@/lib/generation-locks';
 import { getDailyPlanningQueue, getPriorityById } from '@/lib/priorities';
 import { getMemoryForPriority } from '@/lib/priority-memory';
+import { maybeSummarizeOnSessionStart } from '@/lib/memory-summarize';
 import { getSettingsView } from '@/lib/settings';
 import { encodeSseEvent, SSE_HEADERS, type SseEvent } from '@/lib/sse';
 
@@ -133,6 +134,7 @@ export async function POST(req: Request) {
     });
   }
 
+  await maybeSummarizeOnSessionStart(userId, priority.id);
   const recentMemory = (await getMemoryForPriority(userId, priority.id)).slice(0, 10);
   const queue = await getDailyPlanningQueue(userId);
   const currentIdx = queue.findIndex((p) => p.id === priority.id);

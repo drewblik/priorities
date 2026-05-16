@@ -134,3 +134,107 @@ export async function recordCallCost(
 // Suppress unused-import warning for `gte` (kept for symmetry with M9-style
 // patterns; will be used as the cap helpers grow).
 void gte;
+
+export type CostStatus = {
+  todayUsd: number;
+  monthUsd: number;
+  dailyCapUsd: number;
+  monthlyCapUsd: number;
+  dailyPct: number; // 0..1+ (can exceed 1 if overshot)
+  monthlyPct: number;
+  /** worst of the two, drives banner: 'ok' | 'warn' (>=80%) | 'blocked' (>=100%) */
+  level: 'ok' | 'warn' | 'blocked';
+};
+
+/** Headline numbers + derived banner level. Used by the Cost & Usage tab
+ *  and the app-wide cost banner. */
+export async function getCostStatus(userId: string): Promise<CostStatus> {
+  const settingsRows = await db
+    .select({
+      dailyCap: userSettings.dailyCostCapUsd,
+      monthlyCap: userSettings.monthlyCostCapUsd,
+    })
+    .from(userSettings)
+    .where(eq(userSettings.userId, userId))
+    .limit(1);
+  const dailyCapUsd = Number.parseFloat(settingsRows[0]?.dailyCap ?? '5.00');
+  const monthlyCapUsd = Number.parseFloat(settingsRows[0]?.monthlyCap ?? '50.00');
+
+  const [todayUsd, monthUsd] = await Promise.all([
+    sumTodayCost(userId),
+    sumMonthCost(userId),
+  ]);
+
+  const dailyPct = dailyCapUsd > 0 ? todayUsd / dailyCapUsd : 0;
+  const monthlyPct = monthlyCapUsd > 0 ? monthUsd / monthlyCapUsd : 0;
+  const worst = Math.max(dailyPct, monthlyPct);
+  const level: CostStatus['level'] =
+    worst >= 1 ? 'blocked' : worst >= 0.8 ? 'warn' : 'ok';
+
+  return {
+    todayUsd,
+    monthUsd,
+    dailyCapUsd,
+    monthlyCapUsd,
+    dailyPct,
+    monthlyPct,
+    level,
+  };
+}
+
+export type CostBreakdownRow = { sessionType: string; totalUsd: number };
+export type CostTrendPoint = { date: string; usd: number };
+
+/** Per-session-type spend (all-time) + last-30-day daily trend, both in
+ *  user TZ. Powers the Cost & Usage tab's breakdown + sparkline. */
+export async function getCostBreakdown(userId: string): Promise<{
+  byType: CostBreakdownRow[];
+  trend: CostTrendPoint[];
+}> {
+  const byTypeRows = await db
+    .select({
+      sessionType: chatSessions.sessionType,
+      total: sql<string>`COALESCE(SUM(${chatSessions.totalCostUsd}), 0)`,
+    })
+    .from(chatSessions)
+    .where(and(eq(chatSessions.userId, userId), isNull(chatSessions.deletedAt)))
+    .groupBy(chatSessions.sessionType);
+
+  const trendRows = await db
+    .select({
+      day: sql<string>`(${chatSessions.openedAt} AT TIME ZONE (
+        SELECT timezone FROM users WHERE id = ${userId}
+      ))::date::text`,
+      total: sql<string>`COALESCE(SUM(${chatSessions.totalCostUsd}), 0)`,
+    })
+    .from(chatSessions)
+    .where(
+      and(
+        eq(chatSessions.userId, userId),
+        isNull(chatSessions.deletedAt),
+        sql`(${chatSessions.openedAt} AT TIME ZONE (
+          SELECT timezone FROM users WHERE id = ${userId}
+        ))::date >= (NOW() AT TIME ZONE (
+          SELECT timezone FROM users WHERE id = ${userId}
+        ))::date - INTERVAL '29 days'`,
+      ),
+    )
+    .groupBy(
+      sql`(${chatSessions.openedAt} AT TIME ZONE (
+        SELECT timezone FROM users WHERE id = ${userId}
+      ))::date`,
+    );
+
+  return {
+    byType: byTypeRows
+      .map((r) => ({
+        sessionType: r.sessionType,
+        totalUsd: Number.parseFloat(r.total ?? '0'),
+      }))
+      .filter((r) => r.totalUsd > 0)
+      .sort((a, b) => b.totalUsd - a.totalUsd),
+    trend: trendRows
+      .map((r) => ({ date: r.day, usd: Number.parseFloat(r.total ?? '0') }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}

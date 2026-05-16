@@ -22,6 +22,7 @@ import { recordCallCost, withinCostCap } from '@/lib/cost-cap';
 import { acquireLock, releaseLock } from '@/lib/generation-locks';
 import { getPriorityById } from '@/lib/priorities';
 import { getMemoryForPriority } from '@/lib/priority-memory';
+import { maybeSummarizeOnSessionStart } from '@/lib/memory-summarize';
 import {
   alreadyClaimedByOthers,
   buildQuarterSystemPrompt,
@@ -142,6 +143,7 @@ export async function POST(req: Request) {
 
   // Build system prompt + tool context.
   const totalWeeks = weeksInQuarter(quarter.startDate, quarter.endDate);
+  await maybeSummarizeOnSessionStart(userId, priority.id);
   const recentMemory = (await getMemoryForPriority(userId, priority.id)).slice(0, 10);
   const allFocus = await getQuarterWeekFocusForQuarter(userId, quarter.id);
   const systemPrompt = buildQuarterSystemPrompt({
