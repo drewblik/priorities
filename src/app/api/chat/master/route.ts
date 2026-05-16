@@ -1,4 +1,5 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import { formatInTimeZone } from 'date-fns-tz';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentSession } from '@/auth';
@@ -40,6 +41,11 @@ const ScreenContextSchema = z.object({
   current_week_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   current_day_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   current_priority_id: z.string().max(100).optional(),
+  // current_date / current_time / timezone are injected server-side after
+  // validation, so they're accepted-but-ignored if the client sends them.
+  current_date: z.string().optional(),
+  current_time: z.string().optional(),
+  timezone: z.string().optional(),
 });
 
 const BodySchema = z.object({
@@ -62,7 +68,20 @@ export async function POST(req: Request) {
   }
 
   const userId = session.user.id;
-  const { message, screen_context } = parsed.data;
+  const { message } = parsed.data;
+
+  // Inject authoritative current date/time/timezone into the screen
+  // context (always fresh; client-sent values ignored). Without this the
+  // model can't resolve relative dates like "tomorrow" → it returns
+  // placeholders like "<UNKNOWN>" that fail target_date validation.
+  const tz = session.user.timezone;
+  const now = new Date();
+  const screen_context: ScreenContext = {
+    ...(parsed.data.screen_context as ScreenContext),
+    current_date: formatInTimeZone(now, tz, 'yyyy-MM-dd'),
+    current_time: formatInTimeZone(now, tz, 'HH:mm'),
+    timezone: tz,
+  };
 
   // Load council + master session in parallel; both are required for the prompt.
   const [allPriorities, chatSession] = await Promise.all([
@@ -152,7 +171,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = buildMasterChatSystemPrompt({
       council,
-      screenContext: screen_context as ScreenContext,
+      screenContext: screen_context,
       recentMessages,
       newUserMessage: message,
     });

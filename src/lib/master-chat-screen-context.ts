@@ -14,6 +14,16 @@ export type ScreenContext = {
   current_week_start_date?: string;
   current_day_date?: string;
   current_priority_id?: string;
+  /** Today's calendar date (YYYY-MM-DD) in the user's timezone. Injected
+   *  server-side at request time so the model can resolve relative
+   *  references like "tomorrow" / "next week" / "Friday" into concrete
+   *  dates. Always fresh + authoritative (client-sent value is ignored). */
+  current_date?: string;
+  /** Current wall-clock time (HH:mm) in the user's timezone. Helps the
+   *  model reason about "this evening" / "later today". */
+  current_time?: string;
+  /** IANA timezone string, e.g. "America/Los_Angeles". */
+  timezone?: string;
 };
 
 const FROM_PATH_DENYLIST = new Set(['/signin', '/chat']);

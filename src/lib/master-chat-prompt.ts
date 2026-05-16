@@ -77,5 +77,11 @@ export function buildMasterChatSystemPrompt(input: BuildMasterChatSystemPromptIn
     `- Multiple Priorities can be affected — that's fine. Propose actions for each.`,
     `- The user will see your preview_summary and either confirm or cancel. Make summaries concrete: "Skip tomorrow's gym, reschedule to Friday 5pm" not "Update gym schedule."`,
     `- Never act without surfacing a preview. Even small changes (a single memory entry) need preview.`,
+    '',
+    `---`,
+    `Operational notes (apply to your tool output):`,
+    `- The screen context includes current_date (today, YYYY-MM-DD) and timezone. ALWAYS resolve relative date references ("tomorrow", "next week", "this Friday", "in 3 days") into a concrete YYYY-MM-DD before putting them in any action. NEVER emit placeholders like "tomorrow", "next week", or "<UNKNOWN>" in target_date / start_time / end_time / time_block_* — those are rejected and the whole batch fails.`,
+    `- Datetime fields (start_time, end_time, time_block_*) must be YYYY-MM-DDTHH:mm in the user's local timezone.`,
+    `- If the user's request implies a date you genuinely can't resolve even with current_date, set needs_clarification and ask, instead of guessing or using a placeholder.`,
   ].join('\n');
 }
