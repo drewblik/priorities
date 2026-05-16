@@ -1,6 +1,6 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { formatInTimeZone } from 'date-fns-tz';
-import { and, desc, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentSession } from '@/auth';
@@ -293,6 +293,49 @@ export async function POST(req: Request) {
       return jsonError(502, 'malformed_response', parsedResponse.reason);
     }
 
+    // Resolve titles for the exact task/event ids the model referenced —
+    // regardless of status. The prompt's entityRefs list is open-only, so
+    // a done/skipped task the model knew from chat history wouldn't be in
+    // it and the card would show a raw id. Look those up directly.
+    const refMap = new Map(entityRefs.map((e) => [e.id, e]));
+    const taskIdsNeeded = new Set<string>();
+    const eventIdsNeeded = new Set<string>();
+    for (const a of parsedResponse.response.proposed_actions) {
+      if ((a.type === 'modify_task' || a.type === 'complete_task') && !refMap.has(a.task_id)) {
+        taskIdsNeeded.add(a.task_id);
+      }
+      if (a.type === 'modify_event' && !refMap.has(a.event_id)) {
+        eventIdsNeeded.add(a.event_id);
+      }
+    }
+    const extraRefs: Array<{ kind: 'task' | 'event'; id: string; title: string }> = [];
+    if (taskIdsNeeded.size > 0) {
+      const rows = await db
+        .select({ id: tasksTable.id, title: tasksTable.title })
+        .from(tasksTable)
+        .where(
+          and(
+            eq(tasksTable.userId, userId),
+            isNull(tasksTable.deletedAt),
+            inArray(tasksTable.id, [...taskIdsNeeded]),
+          ),
+        );
+      for (const r of rows) extraRefs.push({ kind: 'task', id: r.id, title: r.title });
+    }
+    if (eventIdsNeeded.size > 0) {
+      const rows = await db
+        .select({ id: eventsTable.id, title: eventsTable.title })
+        .from(eventsTable)
+        .where(
+          and(
+            eq(eventsTable.userId, userId),
+            isNull(eventsTable.deletedAt),
+            inArray(eventsTable.id, [...eventIdsNeeded]),
+          ),
+        );
+      for (const r of rows) extraRefs.push({ kind: 'event', id: r.id, title: r.title });
+    }
+
     return NextResponse.json({
       ok: true,
       response: parsedResponse.response,
@@ -300,13 +343,13 @@ export async function POST(req: Request) {
        *  enforce the 5-minute preview expiry per TDD §679. M17 reads this
        *  in the confirm route. */
       preview_generated_at: new Date().toISOString(),
-      /** Slim id→title map so the preview card can render task/event
-       *  titles instead of raw ids for modify_/complete_ actions. */
-      entity_refs: entityRefs.map((e) => ({
-        kind: e.kind,
-        id: e.id,
-        title: e.title,
-      })),
+      /** id→title map so the preview card can render task/event titles
+       *  instead of raw ids. Includes the open/upcoming list PLUS exact
+       *  resolution for any referenced id of any status. */
+      entity_refs: [
+        ...entityRefs.map((e) => ({ kind: e.kind, id: e.id, title: e.title })),
+        ...extraRefs,
+      ],
       usage: {
         input_tokens: completion.usage.input_tokens,
         output_tokens: completion.usage.output_tokens,
