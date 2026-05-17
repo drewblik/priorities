@@ -38,19 +38,42 @@ const FETCH_ATTEMPTS = 2;
 // Outlook feed expands (RRULE over the ±60-day horizon) into thousands of
 // rows; the upsert writes 11 cols/row so 400 rows ≈ 4.4k params. The id-list
 // delete/update is 1 param/id, so 1000 ids/batch is comfortably safe.
-const UPSERT_BATCH = 200;
+const UPSERT_BATCH = 50;
 const ID_BATCH = 1000;
 
 // Microsoft Teams meetings carry huge description blobs (join links, "Need
 // help?", legal boilerplate — often many KB each). Storing them verbatim
 // bloats the Neon HTTP write body past its limit on a busy work calendar.
 // We only need enough description for planning context, so clip hard.
-const MAX_TITLE_CHARS = 300;
-const MAX_DESC_CHARS = 1000;
+const MAX_TITLE_CHARS = 200;
+const MAX_DESC_CHARS = 500;
 
 function clip(s: string | null | undefined, max: number): string | null {
   if (s == null) return null;
   return s.length > max ? s.slice(0, max) : s;
+}
+
+/**
+ * Drizzle wraps driver errors and stuffs the ENTIRE failing SQL + every
+ * bound parameter into `.message` ("Failed query: insert into ... values
+ * ($1...$2992) ... params: <thousands of values>"). The actual reason
+ * (NeonDbError: request too large / statement timeout / etc.) lives on the
+ * `.cause` chain. This walks to the deepest real message, strips the params
+ * tail, and hard-caps length so `last_sync_error` is human-readable.
+ */
+function conciseError(err: unknown): string {
+  const chain: string[] = [];
+  let cur: unknown = err;
+  const seen = new Set<unknown>();
+  while (cur && typeof cur === 'object' && !seen.has(cur)) {
+    seen.add(cur);
+    const e = cur as { message?: unknown; cause?: unknown };
+    if (typeof e.message === 'string' && e.message) chain.push(e.message);
+    cur = e.cause;
+  }
+  const real = [...chain].reverse().find((m) => !m.startsWith('Failed query:'));
+  const picked = real ?? chain[0] ?? String(err);
+  return picked.split(' params:')[0].replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 
 // Hard ceiling on events stored per sync. A large Outlook calendar can
@@ -178,7 +201,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
     const url = decryptFeedUrl(config);
     parsed = await fetchAndParseIcs(url);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = conciseError(err);
     await recordFeedSyncResult(config.id, { success: false, error: msg, at: startedAt });
     return { success: false, upserted: 0, reconciled: { hardDeleted: 0, markedRemoved: 0 }, error: msg };
   }
@@ -282,7 +305,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = conciseError(err);
     await recordFeedSyncResult(config.id, { success: false, error: msg, at: startedAt });
     return {
       success: false,
