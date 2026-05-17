@@ -1,12 +1,10 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { findCalendarConflicts } from '@/lib/calendar-conflicts';
-import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 
 export default async function ConflictsPage() {
   const session = await requireUser();
   // Sync first so the list reflects the latest external calendar state.
-  await syncDueFeedsForUser(session.user.id);
   const conflicts = await findCalendarConflicts(
     session.user.id,
     session.user.timezone,

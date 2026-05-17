@@ -2,7 +2,6 @@ import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/auth';
-import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { getCalendarFeedEventsForRange } from '@/lib/calendar-feeds';
 import { extractAssistantText, loadThread } from '@/lib/chat-messages';
 import { getClosedSessions, getOrCreateSession } from '@/lib/chat-sessions';
@@ -34,7 +33,6 @@ export default async function WeeklyPlanPage({
   searchParams: Promise<SearchParams>;
 }) {
   const session = await requireUser();
-  await syncDueFeedsForUser(session.user.id);
   const { weekStartDate } = await params;
   const sp = await searchParams;
   const adjustMode = sp.mode === 'adjust';

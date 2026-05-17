@@ -8,7 +8,6 @@ import {
   weeksInQuarter,
 } from '@/lib/quarters';
 import { countCalendarConflicts } from '@/lib/calendar-conflicts';
-import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { hasUnplannedNewPriorities } from '@/lib/onboarding';
 import { getScheduledMinutesThisWeek } from '@/lib/weekly-tracking';
 import { ConflictBanner } from '../ConflictBanner';
@@ -32,7 +31,6 @@ export default async function CouncilHomePage({
   const session = await requireUser();
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  await syncDueFeedsForUser(session.user.id);
   const [all, quarter, showMidCycle, conflictCount, scheduledMinutes] =
     await Promise.all([
       getPrioritiesForUser(session.user.id, { includeArchived: showArchived }),

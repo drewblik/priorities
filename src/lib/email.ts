@@ -11,19 +11,27 @@ function getResend(): Resend {
   return cached;
 }
 
-export async function sendMagicLinkEmail(to: string, magicLinkUrl: string): Promise<void> {
+export async function sendMagicLinkEmail(
+  to: string,
+  magicLinkUrl: string,
+  code: string,
+): Promise<void> {
   const from = process.env.EMAIL_FROM ?? 'Priorities <onboarding@resend.dev>';
 
   const { error } = await getResend().emails.send({
     from,
     to,
-    subject: 'Sign in to Priorities',
+    subject: `Your Priorities sign-in code: ${code}`,
     text: [
-      'Click the link below to sign in to Priorities:',
+      `Your sign-in code is: ${code}`,
       '',
+      'Enter this code in the Priorities app (best if you added it to your',
+      'home screen — you stay in the app).',
+      '',
+      'Or tap this link to sign in directly:',
       magicLinkUrl,
       '',
-      'This link expires in 15 minutes and can only be used once.',
+      'The code and link expire in 15 minutes and can only be used once.',
       '',
       "If you didn't request this, you can ignore the email.",
     ].join('\n'),
