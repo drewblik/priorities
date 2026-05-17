@@ -206,6 +206,14 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
     return { success: false, upserted: 0, reconciled: { hardDeleted: 0, markedRemoved: 0 }, error: msg };
   }
 
+  // Outlook republishes the same UID repeatedly (recurring master +
+  // RECURRENCE-ID modified occurrences, plus plain duplicate VEVENTs). Two
+  // rows sharing (source_feed_id, external_id) in one INSERT ... ON CONFLICT
+  // make Postgres throw "ON CONFLICT DO UPDATE command cannot affect row a
+  // second time". Collapse to one row per externalId (last occurrence wins —
+  // a modified occurrence appears after its master in the feed).
+  parsed = Array.from(new Map(parsed.map((e) => [e.externalId, e])).values());
+
   const fetchedIds = new Set(parsed.map((e) => e.externalId));
 
   // The DB phase (upsert + reconcile) is guarded: a busy Outlook feed can
