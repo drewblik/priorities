@@ -24,3 +24,28 @@ html, body {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Tap feedback (M2.1 polish). The site clears the native iOS tap
+   highlight, so without this, taps feel dead on a phone. Give every
+   interactive element an instant pressed state + kill the 300ms delay. */
+button,
+a,
+[role="button"],
+summary,
+label:has(input[type="radio"].sr-only),
+label:has(input[type="checkbox"].sr-only) {
+  touch-action: manipulation;
+  transition: opacity 0.1s ease, transform 0.05s ease;
+}
+button:active:not(:disabled),
+a:active,
+[role="button"]:active,
+summary:active,
+label:has(input[type="radio"].sr-only):active,
+label:has(input[type="checkbox"].sr-only):active {
+  opacity: 0.6;
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: not-allowed;
+}

@@ -17,30 +17,51 @@ const THROTTLE_MS = 5 * 60 * 1000; // match the server 5-min freshness window
  */
 export function CalendarAutoSync() {
   const router = useRouter();
-  const [state, setState] = useState<'idle' | 'syncing' | 'done'>('idle');
+  const [state, setState] = useState<'idle' | 'syncing' | 'done' | 'slow'>('idle');
 
   useEffect(() => {
     const last = Number(localStorage.getItem(LS_KEY) ?? '0');
     if (Date.now() - last < THROTTLE_MS) return;
 
     let cancelled = false;
+    const ctrl = new AbortController();
+    // Hard cap so the pill can NEVER stick (Vercel kills the function at
+    // 60s; give a little headroom then give up cleanly).
+    const cap = setTimeout(() => ctrl.abort(), 70_000);
+
     setState('syncing');
-    fetch('/api/calendar-feeds/sync-all', { method: 'POST' })
-      .then((r) => (r.ok || r.status === 200 ? r.json().catch(() => null) : null))
-      .then((j: { ok?: boolean; total?: number } | null) => {
+    // Mark attempted up-front so a slow/failed feed doesn't re-trigger on
+    // every navigation within the throttle window.
+    localStorage.setItem(LS_KEY, String(Date.now()));
+
+    fetch('/api/calendar-feeds/sync-all', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      signal: ctrl.signal,
+    })
+      .then((r) => (r.ok ? r.json().catch(() => null) : null))
+      .then((j: { ok?: boolean; total?: number; failed?: number } | null) => {
         if (cancelled) return;
-        localStorage.setItem(LS_KEY, String(Date.now()));
-        setState('done');
-        // Only refresh if there were feeds (avoids a pointless re-render).
-        if (j && (j.total ?? 0) > 0) router.refresh();
-        setTimeout(() => !cancelled && setState('idle'), 2500);
+        if (j && (j.failed ?? 0) > 0) {
+          setState('slow');
+        } else {
+          setState('done');
+          if (j && (j.total ?? 0) > 0) router.refresh();
+        }
+        setTimeout(() => !cancelled && setState('idle'), 3000);
       })
       .catch(() => {
-        if (!cancelled) setState('idle');
+        if (!cancelled) {
+          setState('slow');
+          setTimeout(() => !cancelled && setState('idle'), 4000);
+        }
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(cap);
+      ctrl.abort();
     };
     // Run once per mount; route changes remount the page tree anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,6 +79,11 @@ export function CalendarAutoSync() {
         <>
           <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
           Syncing calendar…
+        </>
+      ) : state === 'slow' ? (
+        <>
+          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          Calendar slow/failed — retry in Settings
         </>
       ) : (
         <>

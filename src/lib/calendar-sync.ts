@@ -26,7 +26,13 @@ export type SyncFeedResult = {
   error?: string;
 };
 
-const FETCH_TIMEOUT_MS = 30_000; // Outlook published .ics feeds are slow + large (M20 sign-off: 10s timed out)
+// Two attempts at 25s each (≈50s worst case, under Vercel Hobby's 60s
+// function ceiling). Outlook published .ics endpoints are slow on a cold
+// request but the fetch primes a server-side cache, so the retry usually
+// lands fast. A feed that fails both 25s attempts is a documented Hobby
+// limitation (→ M21 / Vercel Pro / out-of-band ingestion).
+const FETCH_TIMEOUT_MS = 25_000;
+const FETCH_ATTEMPTS = 2;
 
 /** Sync horizon — past 7 days through next 60. Recurring instances outside
  *  this window aren't materialized so the events table stays bounded. */
@@ -42,14 +48,25 @@ export async function fetchAndParseIcs(
   url: string,
   horizon: { start: Date; end: Date } = getSyncHorizon(),
 ): Promise<ParsedEvent[]> {
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    redirect: 'follow',
-    headers: { Accept: 'text/calendar, text/plain, */*' },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  return parseIcs(text, horizon);
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        redirect: 'follow',
+        headers: { Accept: 'text/calendar, text/plain, */*' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      return parseIcs(text, horizon);
+    } catch (err) {
+      lastErr = err;
+      // Retry once on the cold-fetch timeout/5xx; the 2nd request usually
+      // hits the provider's now-warm cache.
+      if (attempt < FETCH_ATTEMPTS) continue;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export function parseIcs(
