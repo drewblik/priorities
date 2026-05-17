@@ -1,6 +1,7 @@
 import { formatInTimeZone } from 'date-fns-tz';
 import { requireUser } from '@/auth';
 import { getFeedsForUser, type CalendarFeedConfigView } from '@/lib/calendar-feeds';
+import { SyncButton } from './SyncButton';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -145,18 +146,7 @@ export default async function CalendarSettingsPage({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Your feeds ({feeds.length})
           </h3>
-          {feeds.length > 0 ? (
-            <form method="post" action="/api/calendar-feeds/sync-all">
-              <input type="hidden" name="_redirect" value="/settings/calendar" />
-              <button
-                type="submit"
-                className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
-                title="Re-fetch every feed now"
-              >
-                ↻ Sync all
-              </button>
-            </form>
-          ) : null}
+          {feeds.length > 0 ? <SyncButton scope="all" /> : null}
         </div>
         {feeds.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
@@ -246,15 +236,7 @@ function FeedRow({
       </details>
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <form method="post" action="/api/calendar-feeds/sync">
-          <input type="hidden" name="id" value={feed.id} />
-          <button
-            type="submit"
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
-          >
-            Sync now
-          </button>
-        </form>
+        <SyncButton scope="feed" feedId={feed.id} />
         <form
           method="post"
           action={`/api/calendar-feeds/${feed.id}`}
