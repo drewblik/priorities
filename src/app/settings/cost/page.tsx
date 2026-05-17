@@ -41,10 +41,27 @@ export default async function CostSettingsPage({
   const saved = sp.saved === '1';
   const errored = typeof sp.error === 'string';
 
-  const [status, breakdown] = await Promise.all([
-    getCostStatus(session.user.id),
-    getCostBreakdown(session.user.id),
-  ]);
+  let data: {
+    status: Awaited<ReturnType<typeof getCostStatus>>;
+    breakdown: Awaited<ReturnType<typeof getCostBreakdown>>;
+  };
+  try {
+    const [status, breakdown] = await Promise.all([
+      getCostStatus(session.user.id),
+      getCostBreakdown(session.user.id),
+    ]);
+    data = { status, breakdown };
+  } catch (err) {
+    return (
+      <section className="space-y-4">
+        <h2 className="text-lg font-medium">Cost &amp; Usage</h2>
+        <div className="rounded-md border border-red-600/30 bg-red-600/5 px-3 py-2 text-sm text-red-700">
+          Couldn&apos;t load cost data: {err instanceof Error ? err.message : String(err)}
+        </div>
+      </section>
+    );
+  }
+  const { status, breakdown } = data;
 
   const maxTrend = Math.max(0.0001, ...breakdown.trend.map((t) => t.usd));
 
