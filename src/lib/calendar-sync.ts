@@ -26,7 +26,7 @@ export type SyncFeedResult = {
   error?: string;
 };
 
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 30_000; // Outlook published .ics feeds are slow + large (M20 sign-off: 10s timed out)
 
 /** Sync horizon — past 7 days through next 60. Recurring instances outside
  *  this window aren't materialized so the events table stays bounded. */

@@ -1,16 +1,22 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { randomInt, createHash } from 'node:crypto';
 import { and, eq, isNull, lt } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { magicLinkTokens, users, type User } from '@/db/schema';
 import { newId } from '@/lib/id';
 import { sendMagicLinkEmail } from '@/lib/email';
 
-const TOKEN_BYTES = 24;
 const MAGIC_LINK_TTL_MIN = 15;
 const CLEANUP_THRESHOLD_HOURS = 24;
 
-function generateMagicLinkToken(): string {
-  return randomBytes(TOKEN_BYTES).toString('base64url');
+/**
+ * 8-digit numeric code. Doubles as the email-link token AND the in-app
+ * code so one credential covers both flows. 100M space + 15-min
+ * single-use TTL + single-user posture (TDD: no endpoint rate limiting in
+ * v1) makes online brute force impractical. Numeric so it's one-handed on
+ * a phone numeric keypad.
+ */
+function generateMagicLinkCode(): string {
+  return randomInt(0, 100_000_000).toString().padStart(8, '0');
 }
 
 function hashToken(token: string): string {
@@ -46,8 +52,8 @@ export async function issueAndSendMagicLink(rawEmail: string): Promise<void> {
     .delete(magicLinkTokens)
     .where(lt(magicLinkTokens.createdAt, hoursAgo(CLEANUP_THRESHOLD_HOURS)));
 
-  const token = generateMagicLinkToken();
-  const tokenHash = hashToken(token);
+  const code = generateMagicLinkCode();
+  const tokenHash = hashToken(code);
   const expiresAt = minutesFromNow(MAGIC_LINK_TTL_MIN);
 
   await db.insert(magicLinkTokens).values({
@@ -57,61 +63,86 @@ export async function issueAndSendMagicLink(rawEmail: string): Promise<void> {
     expiresAt,
   });
 
-  const url = `${getSiteUrl()}/api/auth/callback?token=${encodeURIComponent(token)}`;
-  await sendMagicLinkEmail(email, url);
+  const url = `${getSiteUrl()}/api/auth/callback?token=${encodeURIComponent(code)}`;
+  await sendMagicLinkEmail(email, url, code);
 }
 
 export type MagicLinkVerification =
   | { ok: true; user: User }
   | { ok: false; reason: 'invalid' | 'expired' | 'used' };
 
-export async function verifyMagicLink(rawToken: string): Promise<MagicLinkVerification> {
-  if (!rawToken) return { ok: false, reason: 'invalid' };
-  const tokenHash = hashToken(rawToken);
+/** Shared: claim a found token row single-use, then find/create the user. */
+async function claimAndResolveUser(record: {
+  id: string;
+  email: string;
+  usedAt: Date | null;
+  expiresAt: Date;
+}): Promise<MagicLinkVerification> {
   const now = new Date();
-
-  const rows = await db
-    .select()
-    .from(magicLinkTokens)
-    .where(eq(magicLinkTokens.tokenHash, tokenHash))
-    .limit(1);
-
-  const record = rows[0];
-  if (!record) return { ok: false, reason: 'invalid' };
   if (record.usedAt) return { ok: false, reason: 'used' };
   if (record.expiresAt <= now) return { ok: false, reason: 'expired' };
 
-  // Atomic single-use guard: only flip used_at if it's still null.
   const claimed = await db
     .update(magicLinkTokens)
     .set({ usedAt: now })
     .where(and(eq(magicLinkTokens.id, record.id), isNull(magicLinkTokens.usedAt)))
     .returning({ id: magicLinkTokens.id });
+  if (claimed.length === 0) return { ok: false, reason: 'used' };
 
-  if (claimed.length === 0) {
-    return { ok: false, reason: 'used' };
-  }
-
-  // Find or create the user.
   const existing = await db
     .select()
     .from(users)
     .where(eq(users.email, record.email))
     .limit(1);
-
   let user = existing[0];
   if (!user) {
-    const id = newId('usr');
     const inserted = await db
       .insert(users)
-      .values({ id, email: record.email })
+      .values({ id: newId('usr'), email: record.email })
       .returning();
     user = inserted[0]!;
   }
+  if (user.deletedAt) return { ok: false, reason: 'invalid' };
+  return { ok: true, user };
+}
 
-  if (user.deletedAt) {
+/** Email-link path: token comes from the URL; looked up by hash alone. */
+export async function verifyMagicLink(rawToken: string): Promise<MagicLinkVerification> {
+  if (!rawToken) return { ok: false, reason: 'invalid' };
+  const rows = await db
+    .select()
+    .from(magicLinkTokens)
+    .where(eq(magicLinkTokens.tokenHash, hashToken(rawToken)))
+    .limit(1);
+  const record = rows[0];
+  if (!record) return { ok: false, reason: 'invalid' };
+  return claimAndResolveUser(record);
+}
+
+/**
+ * In-app code path: the user types the 8-digit code without leaving the
+ * PWA. Scoped by email so short numeric codes can't collide across users.
+ */
+export async function verifyMagicLinkCode(
+  rawEmail: string,
+  rawCode: string,
+): Promise<MagicLinkVerification> {
+  const email = normalizeEmail(rawEmail);
+  const code = (rawCode ?? '').trim();
+  if (!email.includes('@') || !/^\d{8}$/.test(code)) {
     return { ok: false, reason: 'invalid' };
   }
-
-  return { ok: true, user };
+  const rows = await db
+    .select()
+    .from(magicLinkTokens)
+    .where(
+      and(
+        eq(magicLinkTokens.email, email),
+        eq(magicLinkTokens.tokenHash, hashToken(code)),
+      ),
+    )
+    .limit(1);
+  const record = rows[0];
+  if (!record) return { ok: false, reason: 'invalid' };
+  return claimAndResolveUser(record);
 }

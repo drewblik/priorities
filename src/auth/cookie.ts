@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 
 export const SESSION_COOKIE_NAME = 'priorities_session';
-export const SESSION_TTL_DAYS = 30;
+export const SESSION_TTL_DAYS = 90; // long-lived so PWA users rarely re-auth (M2.1)
 
 const isProd = process.env.NODE_ENV === 'production';
 

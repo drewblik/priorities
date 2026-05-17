@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { countCalendarConflicts } from '@/lib/calendar-conflicts';
-import { syncDueFeedsForUser } from '@/lib/calendar-sync';
 import { hasUnplannedNewPriorities } from '@/lib/onboarding';
 import { currentDateInTz } from '@/lib/quarters';
 import { ConflictBanner } from '../ConflictBanner';
@@ -48,7 +47,6 @@ export default async function TodayPage({
   const sp = await searchParams;
 
   const tz = session.user.timezone;
-  await syncDueFeedsForUser(session.user.id);
   const todayISO = currentDateInTz(tz);
   const dateISO = pickDate(sp, todayISO);
 

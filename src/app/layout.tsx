@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { CalendarAutoSync } from './CalendarAutoSync';
 import { CostCapBanner } from './CostCapBanner';
 import { MasterChatButton } from './MasterChatButton';
 import { ServiceWorkerRegistrar } from './ServiceWorkerRegistrar';
@@ -37,6 +38,7 @@ export default function RootLayout({
         <CostCapBanner />
         {children}
         <MasterChatButton />
+        <CalendarAutoSync />
         <ServiceWorkerRegistrar />
       </body>
     </html>
