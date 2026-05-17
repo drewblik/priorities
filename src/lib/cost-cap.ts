@@ -1,4 +1,5 @@
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { formatInTimeZone } from 'date-fns-tz';
 import { db } from '@/db/client';
 import { chatSessions, userSettings, users } from '@/db/schema';
 import { tokensToUsd } from './anthropic-pricing';
@@ -131,10 +132,6 @@ export async function recordCallCost(
   return usd;
 }
 
-// Suppress unused-import warning for `gte` (kept for symmetry with M9-style
-// patterns; will be used as the cap helpers grow).
-void gte;
-
 export type CostStatus = {
   todayUsd: number;
   monthUsd: number;
@@ -200,11 +197,12 @@ export async function getCostBreakdown(userId: string): Promise<{
     .where(and(eq(chatSessions.userId, userId), isNull(chatSessions.deletedAt)))
     .groupBy(chatSessions.sessionType);
 
-  // Resolve the user's tz in JS, then bind it as a plain text param.
-  // Postgres's GROUP BY grouping-equality check does not reliably match
-  // expressions that embed a scalar subquery, so the subquery form that
-  // works fine in sumToday/Month WHERE clauses throws here. A bound string
-  // avoids the subquery entirely.
+  // Trend: bucket by user-TZ calendar day in JS rather than SQL. Grouping
+  // by a computed `(opened_at AT TIME ZONE …)::date` expression is fragile —
+  // Drizzle binds each tz interpolation as a distinct param ($1 vs $5), so
+  // Postgres sees the SELECT day-expression and the GROUP BY expression as
+  // different and rejects with "must appear in GROUP BY". Volume here is a
+  // handful of sessions, so a plain row fetch + JS bucketing is bulletproof.
   const tzRows = await db
     .select({ tz: users.timezone })
     .from(users)
@@ -212,20 +210,28 @@ export async function getCostBreakdown(userId: string): Promise<{
     .limit(1);
   const tz = tzRows[0]?.tz ?? 'America/Los_Angeles';
 
-  const trendRows = await db
+  // Generous UTC lower bound (31d) so TZ shifts never clip a day; precise
+  // last-30 trimming happens after bucketing.
+  const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  const rawTrend = await db
     .select({
-      day: sql<string>`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date::text`,
-      total: sql<string>`COALESCE(SUM(${chatSessions.totalCostUsd}), 0)`,
+      openedAt: chatSessions.openedAt,
+      total: chatSessions.totalCostUsd,
     })
     .from(chatSessions)
     .where(
       and(
         eq(chatSessions.userId, userId),
         isNull(chatSessions.deletedAt),
-        sql`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date >= (NOW() AT TIME ZONE ${tz})::date - INTERVAL '29 days'`,
+        gte(chatSessions.openedAt, since),
       ),
-    )
-    .groupBy(sql`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date`);
+    );
+
+  const byDay = new Map<string, number>();
+  for (const r of rawTrend) {
+    const day = formatInTimeZone(r.openedAt, tz, 'yyyy-MM-dd');
+    byDay.set(day, (byDay.get(day) ?? 0) + Number.parseFloat(r.total ?? '0'));
+  }
 
   return {
     byType: byTypeRows
@@ -235,8 +241,9 @@ export async function getCostBreakdown(userId: string): Promise<{
       }))
       .filter((r) => r.totalUsd > 0)
       .sort((a, b) => b.totalUsd - a.totalUsd),
-    trend: trendRows
-      .map((r) => ({ date: r.day, usd: Number.parseFloat(r.total ?? '0') }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
+    trend: [...byDay.entries()]
+      .map(([date, usd]) => ({ date, usd }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-30),
   };
 }
