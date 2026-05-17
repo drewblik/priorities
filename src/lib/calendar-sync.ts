@@ -38,13 +38,35 @@ const FETCH_ATTEMPTS = 2;
 // Outlook feed expands (RRULE over the ±60-day horizon) into thousands of
 // rows; the upsert writes 11 cols/row so 400 rows ≈ 4.4k params. The id-list
 // delete/update is 1 param/id, so 1000 ids/batch is comfortably safe.
-const UPSERT_BATCH = 400;
+const UPSERT_BATCH = 200;
 const ID_BATCH = 1000;
 
-/** Sync horizon — past 7 days through next 60. Recurring instances outside
- *  this window aren't materialized so the events table stays bounded. */
+// Microsoft Teams meetings carry huge description blobs (join links, "Need
+// help?", legal boilerplate — often many KB each). Storing them verbatim
+// bloats the Neon HTTP write body past its limit on a busy work calendar.
+// We only need enough description for planning context, so clip hard.
+const MAX_TITLE_CHARS = 300;
+const MAX_DESC_CHARS = 1000;
+
+function clip(s: string | null | undefined, max: number): string | null {
+  if (s == null) return null;
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+// Hard ceiling on events stored per sync. A large Outlook calendar can
+// RRULE-expand into tens of thousands of instances; fetch + parse + write
+// must finish inside Vercel Hobby's 60s function ceiling. We keep the
+// soonest MAX_PARSED_EVENTS (sorted by start) since Day/Week views and
+// conflict detection are all near-term. The full-fidelity fix (accepted-
+// only filter + Vercel Pro 5-min ceiling) is the next calendar change.
+const MAX_PARSED_EVENTS = 1500;
+
+/** Sync horizon — past 7 days through next 35. Tightened from 60 so a huge
+ *  recurring calendar stays parseable/writable under the 60s Hobby ceiling;
+ *  Day/Week planning + conflict detection are all near-term. Late-quarter
+ *  (>5wk out) feed visibility returns with the accepted-only filter. */
 export function getSyncHorizon(now: Date = new Date()): { start: Date; end: Date } {
-  return { start: addDays(now, -7), end: addDays(now, 60) };
+  return { start: addDays(now, -7), end: addDays(now, 35) };
 }
 
 /**
@@ -107,8 +129,8 @@ export function parseIcs(
           const allDay = occ.startDate.isDate === true;
           out.push({
             externalId: `${event.uid}__${occ.startDate.toString()}`,
-            title: occ.item.summary || '(no title)',
-            description: occ.item.description || null,
+            title: clip(occ.item.summary || '(no title)', MAX_TITLE_CHARS) ?? '(no title)',
+            description: clip(occ.item.description || null, MAX_DESC_CHARS),
             startTime: occ.startDate.toJSDate(),
             endTime: occ.endDate.toJSDate(),
             allDay,
@@ -125,13 +147,21 @@ export function parseIcs(
       const allDay = event.startDate?.isDate === true;
       out.push({
         externalId: event.uid,
-        title: event.summary || '(no title)',
-        description: event.description || null,
+        title: clip(event.summary || '(no title)', MAX_TITLE_CHARS) ?? '(no title)',
+        description: clip(event.description || null, MAX_DESC_CHARS),
         startTime: start,
         endTime: end,
         allDay,
       });
     }
+  }
+
+  // Bound the result to the soonest MAX_PARSED_EVENTS. Events past the cut
+  // aren't stored; reconcile will treat them as removed (boundary events may
+  // churn slightly between syncs — acceptable + self-correcting at v1 scale).
+  if (out.length > MAX_PARSED_EVENTS) {
+    out.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    return out.slice(0, MAX_PARSED_EVENTS);
   }
   return out;
 }
