@@ -34,6 +34,13 @@ export type SyncFeedResult = {
 const FETCH_TIMEOUT_MS = 25_000;
 const FETCH_ATTEMPTS = 2;
 
+// Chunk sizes to stay under Postgres's ~65535 bind-parameter ceiling. A busy
+// Outlook feed expands (RRULE over the ±60-day horizon) into thousands of
+// rows; the upsert writes 11 cols/row so 400 rows ≈ 4.4k params. The id-list
+// delete/update is 1 param/id, so 1000 ids/batch is comfortably safe.
+const UPSERT_BATCH = 400;
+const ID_BATCH = 1000;
+
 /** Sync horizon — past 7 days through next 60. Recurring instances outside
  *  this window aren't materialized so the events table stays bounded. */
 export function getSyncHorizon(now: Date = new Date()): { start: Date; end: Date } {
@@ -148,93 +155,112 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
 
   const fetchedIds = new Set(parsed.map((e) => e.externalId));
 
-  // Upsert all parsed events. Drizzle's onConflictDoUpdate with the unique
-  // index target maps to ON CONFLICT (source_feed_id, external_id). The SET
-  // clause uses `excluded.<col>` so each row's new values land. Re-appearing
-  // rows clear `removed_from_source_at`.
-  let upserted = 0;
-  if (parsed.length > 0) {
-    const rows = parsed.map((e) => ({
-      id: newId('cfe'),
-      sourceFeedId: config.id,
-      userId: config.userId,
-      externalId: e.externalId,
-      title: e.title,
-      description: e.description,
-      startTime: e.startTime,
-      endTime: e.endTime,
-      allDay: e.allDay,
-      lastSyncedAt: startedAt,
-      removedFromSourceAt: null,
-    }));
-    await db
-      .insert(calendarFeedEvents)
-      .values(rows)
-      .onConflictDoUpdate({
-        target: [calendarFeedEvents.sourceFeedId, calendarFeedEvents.externalId],
-        set: {
-          title: sql`excluded.title`,
-          description: sql`excluded.description`,
-          startTime: sql`excluded.start_time`,
-          endTime: sql`excluded.end_time`,
-          allDay: sql`excluded.all_day`,
-          lastSyncedAt: sql`excluded.last_synced_at`,
-          removedFromSourceAt: sql`NULL`,
-        },
-      });
-    upserted = rows.length;
-  }
-
-  // Reconcile: rows in DB whose external_id is NOT in fetchedIds AND not
-  // already marked removed. Future-dated removals are hard-deleted; past-dated
-  // get `removed_from_source_at` set so retrospective views can show them
-  // with an "ⓧ removed from calendar" badge (TDD §725-748).
-  const existing = await db
-    .select({
-      id: calendarFeedEvents.id,
-      externalId: calendarFeedEvents.externalId,
-      startTime: calendarFeedEvents.startTime,
-    })
-    .from(calendarFeedEvents)
-    .where(
-      and(
-        eq(calendarFeedEvents.sourceFeedId, config.id),
-        isNull(calendarFeedEvents.removedFromSourceAt),
-      ),
-    );
-
-  const futureToDelete: string[] = [];
-  const pastToMarkRemoved: string[] = [];
-  for (const row of existing) {
-    if (fetchedIds.has(row.externalId)) continue;
-    if (row.startTime > startedAt) {
-      futureToDelete.push(row.id);
-    } else {
-      pastToMarkRemoved.push(row.id);
+  // The DB phase (upsert + reconcile) is guarded: a busy Outlook feed can
+  // expand to thousands of rows, and any failure here must land in
+  // `last_sync_error` and return `{ success: false }` — never escape as an
+  // uncaught throw (which the route would surface as an opaque 500 with
+  // `last_synced_at` left null).
+  try {
+    // Upsert all parsed events. Drizzle's onConflictDoUpdate with the unique
+    // index target maps to ON CONFLICT (source_feed_id, external_id). The SET
+    // clause uses `excluded.<col>` so each row's new values land. Re-appearing
+    // rows clear `removed_from_source_at`. Chunked to stay under Postgres's
+    // bind-parameter ceiling on large recurring feeds.
+    let upserted = 0;
+    if (parsed.length > 0) {
+      const rows = parsed.map((e) => ({
+        id: newId('cfe'),
+        sourceFeedId: config.id,
+        userId: config.userId,
+        externalId: e.externalId,
+        title: e.title,
+        description: e.description,
+        startTime: e.startTime,
+        endTime: e.endTime,
+        allDay: e.allDay,
+        lastSyncedAt: startedAt,
+        removedFromSourceAt: null,
+      }));
+      for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+        await db
+          .insert(calendarFeedEvents)
+          .values(rows.slice(i, i + UPSERT_BATCH))
+          .onConflictDoUpdate({
+            target: [calendarFeedEvents.sourceFeedId, calendarFeedEvents.externalId],
+            set: {
+              title: sql`excluded.title`,
+              description: sql`excluded.description`,
+              startTime: sql`excluded.start_time`,
+              endTime: sql`excluded.end_time`,
+              allDay: sql`excluded.all_day`,
+              lastSyncedAt: sql`excluded.last_synced_at`,
+              removedFromSourceAt: sql`NULL`,
+            },
+          });
+      }
+      upserted = rows.length;
     }
-  }
 
-  if (futureToDelete.length > 0) {
-    await db
-      .delete(calendarFeedEvents)
-      .where(inArray(calendarFeedEvents.id, futureToDelete));
-  }
-  if (pastToMarkRemoved.length > 0) {
-    await db
-      .update(calendarFeedEvents)
-      .set({ removedFromSourceAt: startedAt })
-      .where(inArray(calendarFeedEvents.id, pastToMarkRemoved));
-  }
+    // Reconcile: rows in DB whose external_id is NOT in fetchedIds AND not
+    // already marked removed. Future-dated removals are hard-deleted; past-dated
+    // get `removed_from_source_at` set so retrospective views can show them
+    // with an "ⓧ removed from calendar" badge (TDD §725-748).
+    const existing = await db
+      .select({
+        id: calendarFeedEvents.id,
+        externalId: calendarFeedEvents.externalId,
+        startTime: calendarFeedEvents.startTime,
+      })
+      .from(calendarFeedEvents)
+      .where(
+        and(
+          eq(calendarFeedEvents.sourceFeedId, config.id),
+          isNull(calendarFeedEvents.removedFromSourceAt),
+        ),
+      );
 
-  await recordFeedSyncResult(config.id, { success: true, at: startedAt });
-  return {
-    success: true,
-    upserted,
-    reconciled: {
-      hardDeleted: futureToDelete.length,
-      markedRemoved: pastToMarkRemoved.length,
-    },
-  };
+    const futureToDelete: string[] = [];
+    const pastToMarkRemoved: string[] = [];
+    for (const row of existing) {
+      if (fetchedIds.has(row.externalId)) continue;
+      if (row.startTime > startedAt) {
+        futureToDelete.push(row.id);
+      } else {
+        pastToMarkRemoved.push(row.id);
+      }
+    }
+
+    for (let i = 0; i < futureToDelete.length; i += ID_BATCH) {
+      await db
+        .delete(calendarFeedEvents)
+        .where(inArray(calendarFeedEvents.id, futureToDelete.slice(i, i + ID_BATCH)));
+    }
+    for (let i = 0; i < pastToMarkRemoved.length; i += ID_BATCH) {
+      await db
+        .update(calendarFeedEvents)
+        .set({ removedFromSourceAt: startedAt })
+        .where(inArray(calendarFeedEvents.id, pastToMarkRemoved.slice(i, i + ID_BATCH)));
+    }
+
+    await recordFeedSyncResult(config.id, { success: true, at: startedAt });
+    return {
+      success: true,
+      upserted,
+      reconciled: {
+        hardDeleted: futureToDelete.length,
+        markedRemoved: pastToMarkRemoved.length,
+      },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await recordFeedSyncResult(config.id, { success: false, error: msg, at: startedAt });
+    return {
+      success: false,
+      upserted: 0,
+      reconciled: { hardDeleted: 0, markedRemoved: 0 },
+      error: msg,
+    };
+  }
 }
 
 /**
