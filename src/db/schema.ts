@@ -325,9 +325,15 @@ export const calendarFeedConfigs = pgTable(
     source: text('source').notNull(), // google|outlook|other
     name: text('name').notNull(),
     feedUrl: text('feed_url').notNull(), // AES-256-GCM-encrypted envelope (base64)
+    // Owner's address on this calendar. NULL = import every event (default,
+    // pre-M21 behavior); set = Phase-2 accepted-only filter keys off it.
+    calendarEmail: text('calendar_email'),
     syncCadenceMin: integer('sync_cadence_min').notNull().default(30),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     lastSyncError: text('last_sync_error'),
+    // Sanitized, PII-free RSVP-signal summary from the last sync (M21 P1
+    // diagnostic). Surfaced read-only in Settings → Calendar.
+    lastSyncDebug: text('last_sync_debug'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -358,6 +364,9 @@ export const calendarFeedEvents = pgTable(
     startTime: timestamp('start_time', { withTimezone: true }).notNull(),
     endTime: timestamp('end_time', { withTimezone: true }).notNull(),
     allDay: boolean('all_day').notNull().default(false),
+    // false = hard/immovable/conflict-blocking (default, pre-M21 behavior);
+    // true = tentatively accepted → Phase 2 renders soft + non-blocking.
+    tentative: boolean('tentative').notNull().default(false),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
     removedFromSourceAt: timestamp('removed_from_source_at', { withTimezone: true }),
   },

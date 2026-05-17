@@ -122,6 +122,22 @@ export default async function CalendarSettingsPage({
             </span>
           </label>
           <label className="block space-y-1">
+            <span className="text-sm font-medium">Your email on this calendar</span>
+            <input
+              type="email"
+              name="calendarEmail"
+              maxLength={254}
+              placeholder="you@company.com (optional)"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
+            />
+            <span className="text-xs text-muted-foreground">
+              Optional. Used to read your RSVP on each event. Leave blank to import
+              every event (current behavior). Setting it doesn&apos;t filter
+              anything yet — it populates the sync diagnostic below so the
+              accepted-only filter can be tuned to this feed.
+            </span>
+          </label>
+          <label className="block space-y-1">
             <span className="text-sm font-medium">Sync cadence (minutes)</span>
             <input
               type="number"
@@ -187,7 +203,8 @@ function FeedRow({
       </div>
 
       <div className="text-xs text-muted-foreground">
-        Last synced: {lastSynced} · Cadence: {feed.syncCadenceMin}m
+        Last synced: {lastSynced} · Cadence: {feed.syncCadenceMin}m · RSVP email:{' '}
+        {feed.calendarEmail ? feed.calendarEmail : 'not set (importing everything)'}
       </div>
       {feed.lastSyncError ? (
         <div className="rounded-md border border-red-600/30 bg-red-600/5 px-2 py-1 text-xs text-red-700">
@@ -195,9 +212,20 @@ function FeedRow({
         </div>
       ) : null}
 
+      {feed.lastSyncDebug ? (
+        <details className="rounded border border-border/60 px-2 py-1">
+          <summary className="cursor-pointer select-none text-xs text-muted-foreground">
+            Sync diagnostic (RSVP signal)
+          </summary>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 font-mono text-[11px] leading-snug text-muted-foreground">
+            {feed.lastSyncDebug}
+          </pre>
+        </details>
+      ) : null}
+
       <details className="rounded border border-border/60 px-2 py-1">
         <summary className="cursor-pointer select-none text-xs text-muted-foreground">
-          Edit name / URL / cadence
+          Edit name / URL / email / cadence
         </summary>
         <form
           method="post"
@@ -216,6 +244,14 @@ function FeedRow({
             name="feedUrl"
             placeholder="Paste a new URL to replace (leave blank to keep current)"
             maxLength={2000}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <input
+            type="email"
+            name="calendarEmail"
+            defaultValue={feed.calendarEmail ?? ''}
+            placeholder="Your email on this calendar (blank = import everything)"
+            maxLength={254}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
           />
           <input

@@ -26,6 +26,158 @@ export type SyncFeedResult = {
   error?: string;
 };
 
+// ---------------------------------------------------------------------------
+// M21 Phase 1 — RSVP-signal diagnostic.
+//
+// Counts only. NO PII: never records titles, names, emails, or attendee
+// addresses — just which RSVP-bearing properties the feed carries and how
+// their values are distributed. Surfaced read-only in Settings → Calendar so
+// the owner can confirm which signal an Outlook-published feed actually
+// exposes BEFORE the Phase-2 accepted-only filter is written against it.
+// Computed once per VEVENT component (not per expanded recurrence occurrence):
+// RSVP props live on the master, and "does this feed carry signal" is a
+// per-event question. Cheap relative to recurrence expansion + the fetch.
+// ---------------------------------------------------------------------------
+
+type Tally<K extends string> = Record<K, number>;
+
+const PARTSTAT_KEYS = [
+  'ACCEPTED',
+  'TENTATIVE',
+  'DECLINED',
+  'NEEDS-ACTION',
+  'DELEGATED',
+  'OTHER',
+] as const;
+const STATUS_KEYS = ['CONFIRMED', 'TENTATIVE', 'CANCELLED', 'NONE', 'OTHER'] as const;
+const XCDO_KEYS = ['FREE', 'TENTATIVE', 'BUSY', 'OOF', 'NONE', 'OTHER'] as const;
+const TRANSP_KEYS = ['OPAQUE', 'TRANSPARENT', 'NONE', 'OTHER'] as const;
+
+export type RsvpDebug = {
+  vevents: number;
+  emailSet: boolean;
+  /** VEVENTs with an ATTENDEE whose address equals the configured email. */
+  attendeeMatched: number;
+  /** VEVENTs whose ORGANIZER address equals the configured email. */
+  organizerIsUser: number;
+  /** VEVENTs that carry at least one ATTENDEE (email-independent). */
+  anyAttendee: number;
+  /** PARTSTAT distribution of the matched attendee only. */
+  matchedPartstat: Tally<(typeof PARTSTAT_KEYS)[number]>;
+  status: Tally<(typeof STATUS_KEYS)[number]>;
+  xCdoBusystatus: Tally<(typeof XCDO_KEYS)[number]>;
+  transp: Tally<(typeof TRANSP_KEYS)[number]>;
+  /** emailSet && no matched-attendee PARTSTAT && not organizer — i.e. the
+   *  feed gave us no primary RSVP signal for the user on this event. */
+  noPrimarySignal: number;
+};
+
+function zeroTally<K extends string>(keys: readonly K[]): Tally<K> {
+  return Object.fromEntries(keys.map((k) => [k, 0])) as Tally<K>;
+}
+
+function up(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim().toUpperCase();
+  return s === '' ? null : s;
+}
+
+/** Normalize a CAL-ADDRESS ("mailto:Foo@Bar.com", "MAILTO:foo@bar.com",
+ *  bare address) to a comparable lowercased email. */
+function calAddr(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim().replace(/^mailto:/i, '').trim().toLowerCase();
+  return s === '' ? null : s;
+}
+
+function bump<K extends string>(
+  m: Tally<K>,
+  raw: string | null,
+  hasNone: boolean,
+): void {
+  const key = (
+    raw == null ? (hasNone ? 'NONE' : 'OTHER') : raw in m ? raw : 'OTHER'
+  ) as K;
+  m[key] = (m[key] ?? 0) + 1;
+}
+
+export function summarizeRsvp(
+  vevents: ICAL.Component[],
+  calendarEmail: string | null,
+): RsvpDebug {
+  const email = calendarEmail ? calendarEmail.trim().toLowerCase() : null;
+  const d: RsvpDebug = {
+    vevents: vevents.length,
+    emailSet: !!email,
+    attendeeMatched: 0,
+    organizerIsUser: 0,
+    anyAttendee: 0,
+    matchedPartstat: zeroTally(PARTSTAT_KEYS),
+    status: zeroTally(STATUS_KEYS),
+    xCdoBusystatus: zeroTally(XCDO_KEYS),
+    transp: zeroTally(TRANSP_KEYS),
+    noPrimarySignal: 0,
+  };
+
+  for (const ve of vevents) {
+    bump(d.status, up(ve.getFirstPropertyValue('status')), true);
+    bump(d.xCdoBusystatus, up(ve.getFirstPropertyValue('x-microsoft-cdo-busystatus')), true);
+    bump(d.transp, up(ve.getFirstPropertyValue('transp')), true);
+
+    const attendees = ve.getAllProperties('attendee');
+    if (attendees.length > 0) d.anyAttendee += 1;
+
+    if (!email) continue;
+
+    let matchedPs: string | null = null;
+    for (const a of attendees) {
+      if (calAddr(a.getFirstValue()) === email) {
+        const ps = a.getParameter('partstat');
+        matchedPs = up(Array.isArray(ps) ? ps[0] : ps) ?? 'NEEDS-ACTION';
+        break;
+      }
+    }
+    const org = ve.getFirstProperty('organizer');
+    const orgIsUser = org ? calAddr(org.getFirstValue()) === email : false;
+
+    if (matchedPs != null) {
+      d.attendeeMatched += 1;
+      bump(d.matchedPartstat, matchedPs, false);
+    }
+    if (orgIsUser) d.organizerIsUser += 1;
+    if (matchedPs == null && !orgIsUser) d.noPrimarySignal += 1;
+  }
+
+  return d;
+}
+
+function tallyStr<K extends string>(m: Tally<K>, keys: readonly K[]): string {
+  return keys.map((k) => `${k} ${m[k]}`).join(' ');
+}
+
+/** Compact, PII-free, phone-readable summary for `last_sync_debug`. */
+export function formatRsvpDebug(d: RsvpDebug): string {
+  const lines = [`RSVP diag · ${d.vevents} events parsed`];
+  if (!d.emailSet) {
+    lines.push(
+      'email: NOT SET — nothing is filtered (current behavior). Set "Your email',
+      'on this calendar" on this feed + Sync now to populate matched/PARTSTAT.',
+    );
+  } else {
+    lines.push(
+      `email: SET · matched-attendee ${d.attendeeMatched} · organizer=you ${d.organizerIsUser} · no-primary-signal ${d.noPrimarySignal}`,
+      `PARTSTAT(you): ${tallyStr(d.matchedPartstat, PARTSTAT_KEYS)}`,
+    );
+  }
+  lines.push(
+    `has-attendees: ${d.anyAttendee}/${d.vevents}`,
+    `STATUS: ${tallyStr(d.status, STATUS_KEYS)}`,
+    `X-CDO-BUSY: ${tallyStr(d.xCdoBusystatus, XCDO_KEYS)}`,
+    `TRANSP: ${tallyStr(d.transp, TRANSP_KEYS)}`,
+  );
+  return lines.join('\n');
+}
+
 // Two attempts at 25s each (≈50s worst case, under Vercel Hobby's 60s
 // function ceiling). Outlook published .ics endpoints are slow on a cold
 // request but the fetch primes a server-side cache, so the retry usually
@@ -99,7 +251,8 @@ export function getSyncHorizon(now: Date = new Date()): { start: Date; end: Date
 export async function fetchAndParseIcs(
   url: string,
   horizon: { start: Date; end: Date } = getSyncHorizon(),
-): Promise<ParsedEvent[]> {
+  calendarEmail: string | null = null,
+): Promise<{ events: ParsedEvent[]; debug: RsvpDebug }> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
     try {
@@ -110,7 +263,7 @@ export async function fetchAndParseIcs(
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
-      return parseIcs(text, horizon);
+      return parseIcs(text, horizon, calendarEmail);
     } catch (err) {
       lastErr = err;
       // Retry once on the cold-fetch timeout/5xx; the 2nd request usually
@@ -124,10 +277,12 @@ export async function fetchAndParseIcs(
 export function parseIcs(
   text: string,
   horizon: { start: Date; end: Date },
-): ParsedEvent[] {
+  calendarEmail: string | null = null,
+): { events: ParsedEvent[]; debug: RsvpDebug } {
   const jcal = ICAL.parse(text);
   const cal = new ICAL.Component(jcal);
   const vevents = cal.getAllSubcomponents('vevent');
+  const debug = summarizeRsvp(vevents, calendarEmail);
   const horizonStart = ICAL.Time.fromJSDate(horizon.start, true);
   const horizonEnd = ICAL.Time.fromJSDate(horizon.end, true);
 
@@ -184,9 +339,9 @@ export function parseIcs(
   // churn slightly between syncs — acceptable + self-correcting at v1 scale).
   if (out.length > MAX_PARSED_EVENTS) {
     out.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-    return out.slice(0, MAX_PARSED_EVENTS);
+    return { events: out.slice(0, MAX_PARSED_EVENTS), debug };
   }
-  return out;
+  return { events: out, debug };
 }
 
 /**
@@ -197,11 +352,16 @@ export function parseIcs(
 export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResult> {
   const startedAt = new Date();
   let parsed: ParsedEvent[];
+  let debugStr: string;
   try {
     const url = decryptFeedUrl(config);
-    parsed = await fetchAndParseIcs(url);
+    const r = await fetchAndParseIcs(url, getSyncHorizon(), config.calendarEmail);
+    parsed = r.events;
+    debugStr = formatRsvpDebug(r.debug);
   } catch (err) {
     const msg = conciseError(err);
+    // Fetch/parse failed → no diagnostic to write; preserve the previous
+    // last_sync_debug (omit `debug` so it isn't overwritten).
     await recordFeedSyncResult(config.id, { success: false, error: msg, at: startedAt });
     return { success: false, upserted: 0, reconciled: { hardDeleted: 0, markedRemoved: 0 }, error: msg };
   }
@@ -303,7 +463,11 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
         .where(inArray(calendarFeedEvents.id, pastToMarkRemoved.slice(i, i + ID_BATCH)));
     }
 
-    await recordFeedSyncResult(config.id, { success: true, at: startedAt });
+    await recordFeedSyncResult(config.id, {
+      success: true,
+      at: startedAt,
+      debug: debugStr,
+    });
     return {
       success: true,
       upserted,
@@ -314,7 +478,14 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
     };
   } catch (err) {
     const msg = conciseError(err);
-    await recordFeedSyncResult(config.id, { success: false, error: msg, at: startedAt });
+    // Parse succeeded but the DB write failed — the diagnostic is still
+    // valid and worth surfacing, so persist it alongside the error.
+    await recordFeedSyncResult(config.id, {
+      success: false,
+      error: msg,
+      at: startedAt,
+      debug: debugStr,
+    });
     return {
       success: false,
       upserted: 0,

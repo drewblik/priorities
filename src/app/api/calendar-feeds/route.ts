@@ -65,6 +65,7 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       source: parsed.data.source,
       feedUrl: parsed.data.feedUrl,
+      calendarEmail: parsed.data.calendarEmail ?? null,
       syncCadenceMin: parsed.data.syncCadenceMin,
     });
   } catch (err) {
