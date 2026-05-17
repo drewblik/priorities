@@ -1,6 +1,6 @@
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { chatSessions, userSettings } from '@/db/schema';
+import { chatSessions, userSettings, users } from '@/db/schema';
 import { tokensToUsd } from './anthropic-pricing';
 import type { AnthropicModelId } from './anthropic-models';
 
@@ -200,11 +200,21 @@ export async function getCostBreakdown(userId: string): Promise<{
     .where(and(eq(chatSessions.userId, userId), isNull(chatSessions.deletedAt)))
     .groupBy(chatSessions.sessionType);
 
+  // Resolve the user's tz in JS, then bind it as a plain text param.
+  // Postgres's GROUP BY grouping-equality check does not reliably match
+  // expressions that embed a scalar subquery, so the subquery form that
+  // works fine in sumToday/Month WHERE clauses throws here. A bound string
+  // avoids the subquery entirely.
+  const tzRows = await db
+    .select({ tz: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const tz = tzRows[0]?.tz ?? 'America/Los_Angeles';
+
   const trendRows = await db
     .select({
-      day: sql<string>`(${chatSessions.openedAt} AT TIME ZONE (
-        SELECT timezone FROM users WHERE id = ${userId}
-      ))::date::text`,
+      day: sql<string>`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date::text`,
       total: sql<string>`COALESCE(SUM(${chatSessions.totalCostUsd}), 0)`,
     })
     .from(chatSessions)
@@ -212,18 +222,10 @@ export async function getCostBreakdown(userId: string): Promise<{
       and(
         eq(chatSessions.userId, userId),
         isNull(chatSessions.deletedAt),
-        sql`(${chatSessions.openedAt} AT TIME ZONE (
-          SELECT timezone FROM users WHERE id = ${userId}
-        ))::date >= (NOW() AT TIME ZONE (
-          SELECT timezone FROM users WHERE id = ${userId}
-        ))::date - INTERVAL '29 days'`,
+        sql`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date >= (NOW() AT TIME ZONE ${tz})::date - INTERVAL '29 days'`,
       ),
     )
-    .groupBy(
-      sql`(${chatSessions.openedAt} AT TIME ZONE (
-        SELECT timezone FROM users WHERE id = ${userId}
-      ))::date`,
-    );
+    .groupBy(sql`(${chatSessions.openedAt} AT TIME ZONE ${tz})::date`);
 
   return {
     byType: byTypeRows
