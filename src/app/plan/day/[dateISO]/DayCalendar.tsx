@@ -59,6 +59,7 @@ export function DayCalendar({
     title: string;
     color: string;
     isFeedAllDay: boolean;
+    isTentative: boolean;
     topPx: number;
     heightPx: number;
     startLabel: string;
@@ -73,6 +74,7 @@ export function DayCalendar({
     title: string;
     color: string;
     isFeedAllDay?: boolean;
+    isTentative?: boolean;
     startUtc: Date;
     endUtc: Date;
     priorityName: string;
@@ -99,6 +101,7 @@ export function DayCalendar({
       title: args.title,
       color: args.color,
       isFeedAllDay: !!args.isFeedAllDay,
+      isTentative: !!args.isTentative,
       topPx,
       heightPx,
       startLabel: formatInTimeZone(args.startUtc, userTimezone, 'h:mm a'),
@@ -140,6 +143,7 @@ export function DayCalendar({
       title: fe.title,
       color: '#9ca3af', // neutral gray
       isFeedAllDay: fe.allDay,
+      isTentative: fe.tentative,
       startUtc: fe.startTime,
       endUtc: fe.endTime,
       priorityName: 'Calendar',
@@ -166,9 +170,18 @@ export function DayCalendar({
           {allDayFeed.map((fe) => (
             <div
               key={fe.id}
-              className="rounded-md border-l-4 border-gray-400 bg-muted/40 px-2 py-1 text-xs italic text-muted-foreground"
+              className={
+                fe.tentative
+                  ? 'flex items-center gap-2 rounded-md border-l-4 border-amber-500 bg-amber-100/50 px-2 py-1 text-xs italic text-amber-800'
+                  : 'rounded-md border-l-4 border-gray-400 bg-muted/40 px-2 py-1 text-xs italic text-muted-foreground'
+              }
             >
-              {fe.title}
+              <span className="min-w-0 flex-1 truncate">{fe.title}</span>
+              {fe.tentative ? (
+                <span className="flex-none rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-medium not-italic text-amber-900">
+                  tentative · RSVP?
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
@@ -207,9 +220,22 @@ export function DayCalendar({
           ) : (
             blocks.map((b) => {
               const isFeed = b.kind === 'feedEvent';
-              const borderColor = isFeed ? '#9ca3af' : b.color;
-              const bgClass = isFeed ? 'bg-muted/40' : 'bg-background';
-              const textColor = isFeed ? 'text-muted-foreground italic' : 'text-foreground';
+              const isTentativeFeed = isFeed && b.isTentative;
+              const borderColor = isTentativeFeed
+                ? '#f59e0b' // amber-500 — still blocks, flagged for RSVP
+                : isFeed
+                  ? '#9ca3af'
+                  : b.color;
+              const bgClass = isTentativeFeed
+                ? 'bg-amber-100/50'
+                : isFeed
+                  ? 'bg-muted/40'
+                  : 'bg-background';
+              const textColor = isTentativeFeed
+                ? 'text-amber-800 italic'
+                : isFeed
+                  ? 'text-muted-foreground italic'
+                  : 'text-foreground';
               const ringClass = b.isHighlighted ? 'ring-2 ring-primary ring-offset-1' : '';
               return (
                 <div
@@ -224,7 +250,14 @@ export function DayCalendar({
                     borderBottom: '1px solid rgb(0 0 0 / 0.05)',
                   }}
                 >
-                  <div className="truncate font-medium">{b.title}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="min-w-0 flex-1 truncate font-medium">{b.title}</span>
+                    {isTentativeFeed ? (
+                      <span className="flex-none rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-medium not-italic text-amber-900">
+                        tentative · RSVP?
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="truncate opacity-70">
                     {b.startLabel}–{b.endLabel} · {b.priorityName}
                   </div>

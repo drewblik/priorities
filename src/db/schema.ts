@@ -364,8 +364,10 @@ export const calendarFeedEvents = pgTable(
     startTime: timestamp('start_time', { withTimezone: true }).notNull(),
     endTime: timestamp('end_time', { withTimezone: true }).notNull(),
     allDay: boolean('all_day').notNull().default(false),
-    // false = hard/immovable/conflict-blocking (default, pre-M21 behavior);
-    // true = tentatively accepted → Phase 2 renders soft + non-blocking.
+    // false = firmly on your calendar (accepted / busy / you organized it).
+    // true = on your calendar but not firmly accepted (tentative / no RSVP).
+    // BOTH hard-block (owner policy, M21 P2); `true` only changes the UI —
+    // rendered amber as an RSVP nudge. Declined/free events aren't stored.
     tentative: boolean('tentative').notNull().default(false),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
     removedFromSourceAt: timestamp('removed_from_source_at', { withTimezone: true }),

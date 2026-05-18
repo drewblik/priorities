@@ -193,13 +193,25 @@ function FeedChip({ feed, userTimezone }: { feed: CalendarFeedEvent; userTimezon
     ? 'All day'
     : formatInTimeZone(feed.startTime, userTimezone, 'h:mm a');
   return (
-    <div className="flex items-start gap-1 rounded border border-border bg-muted/40 px-2 py-1 text-[11px] italic text-muted-foreground">
+    <div
+      className={
+        feed.tentative
+          ? 'flex items-start gap-1 rounded border border-amber-400 bg-amber-100/50 px-2 py-1 text-[11px] italic text-amber-800'
+          : 'flex items-start gap-1 rounded border border-border bg-muted/40 px-2 py-1 text-[11px] italic text-muted-foreground'
+      }
+      title={feed.tentative ? "Tentative — you haven't RSVP'd. Still blocks the slot." : undefined}
+    >
       <span
         aria-hidden="true"
-        className="mt-0.5 h-2 w-2 flex-none rounded-full bg-muted-foreground/50"
+        className={
+          feed.tentative
+            ? 'mt-0.5 h-2 w-2 flex-none rounded-full bg-amber-500'
+            : 'mt-0.5 h-2 w-2 flex-none rounded-full bg-muted-foreground/50'
+        }
       />
       <span className="min-w-0 flex-1 truncate">
         {feed.title} · {time}
+        {feed.tentative ? ' · tentative · RSVP?' : ''}
       </span>
     </div>
   );
