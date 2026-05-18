@@ -45,7 +45,7 @@ export function SyncButton(props: Props) {
         },
       );
       const j = (await res.json().catch(() => null)) as
-        | { ok?: boolean; synced?: number; failed?: number; error?: string }
+        | { ok?: boolean; success?: boolean; synced?: number; failed?: number; error?: string }
         | null;
       if (!res.ok || !j) {
         setStatus({ kind: 'err', msg: j?.error ?? `Failed (${res.status})` });
@@ -59,8 +59,13 @@ export function SyncButton(props: Props) {
             : { kind: 'ok', msg: `Synced ${j.synced ?? 0}` },
         );
       } else {
+        // Single-feed route returns SyncFeedResult: { success, error? }.
+        // (Historically this read `j.ok`, which that route never sends — so
+        // every single-feed sync rendered "Failed" even when it succeeded.)
         setStatus(
-          j.ok ? { kind: 'ok', msg: 'Synced ✓' } : { kind: 'err', msg: j.error ?? 'Failed' },
+          j.success
+            ? { kind: 'ok', msg: 'Synced ✓' }
+            : { kind: 'err', msg: j.error ?? 'Failed' },
         );
       }
       router.refresh();
