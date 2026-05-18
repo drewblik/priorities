@@ -57,6 +57,7 @@ Files written so far:
 - `drizzle/migrations/0008_user_settings_selected_model.sql` — M11 follow-up (selected_model)
 - `drizzle/migrations/0009_chat_planning_locks.sql` — M12 (chat_sessions, chat_messages, generation_locks, quarter_week_focus)
 - `drizzle/migrations/0010_user_settings_chatbot_verbosity.sql` — M13 (chatbot_verbosity)
+- `drizzle/migrations/0011_calendar_rsvp_phase1.sql` — M21 P1 (calendar_feed_configs.calendar_email + last_sync_debug; calendar_feed_events.tentative — all additive, no behavior change)
 
 ## Build-order deviations from TDD
 

@@ -75,6 +75,7 @@ export type CreateCalendarFeedInput = {
   name: string;
   source: 'google' | 'outlook' | 'other';
   feedUrl: string; // plaintext; encrypted before write
+  calendarEmail?: string | null;
   syncCadenceMin?: number;
 };
 
@@ -90,6 +91,7 @@ export async function createFeed(
       source: input.source,
       name: input.name,
       feedUrl: encryptApiKey(input.feedUrl),
+      calendarEmail: input.calendarEmail ?? null,
       syncCadenceMin: input.syncCadenceMin ?? 30,
     })
     .returning();
@@ -100,6 +102,7 @@ export type UpdateCalendarFeedPatch = {
   name?: string;
   source?: 'google' | 'outlook' | 'other';
   feedUrl?: string; // plaintext; encrypted before write
+  calendarEmail?: string | null; // null clears the filter (import everything)
   syncCadenceMin?: number;
 };
 
@@ -112,6 +115,7 @@ export async function updateFeed(
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.source !== undefined) set.source = patch.source;
   if (patch.feedUrl !== undefined) set.feedUrl = encryptApiKey(patch.feedUrl);
+  if (patch.calendarEmail !== undefined) set.calendarEmail = patch.calendarEmail;
   if (patch.syncCadenceMin !== undefined) set.syncCadenceMin = patch.syncCadenceMin;
   if (Object.keys(set).length === 1) return getFeedByIdInternal(userId, id);
 
@@ -157,17 +161,23 @@ export async function softDeleteFeed(userId: string, id: string): Promise<boolea
  *  Used by the sync engine after each fetch attempt. */
 export async function recordFeedSyncResult(
   configId: string,
-  result: { success: boolean; error?: string | null; at?: Date },
+  result: {
+    success: boolean;
+    error?: string | null;
+    at?: Date;
+    /** M21 P1 diagnostic. Only written when provided (a failed fetch has
+     *  no parse summary, so the previous value is preserved). */
+    debug?: string | null;
+  },
 ): Promise<void> {
   const at = result.at ?? new Date();
-  await db
-    .update(calendarFeedConfigs)
-    .set({
-      lastSyncedAt: at,
-      lastSyncError: result.success ? null : (result.error ?? 'unknown error'),
-      updatedAt: at,
-    })
-    .where(eq(calendarFeedConfigs.id, configId));
+  const set: Record<string, unknown> = {
+    lastSyncedAt: at,
+    lastSyncError: result.success ? null : (result.error ?? 'unknown error'),
+    updatedAt: at,
+  };
+  if (result.debug !== undefined) set.lastSyncDebug = result.debug;
+  await db.update(calendarFeedConfigs).set(set).where(eq(calendarFeedConfigs.id, configId));
 }
 
 /**

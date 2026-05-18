@@ -368,11 +368,16 @@ export const FEED_SOURCES = ['google', 'outlook', 'other'] as const;
 const FeedNameField = z.string().trim().min(1).max(120);
 const FeedUrlField = z.string().trim().url().max(2000);
 const FeedCadenceField = z.number().int().min(5).max(1440);
+// Per-feed "your address on this calendar" (M21 P1). Nullable so the edit
+// form can clear it (blank field → null → filter off). The form-data
+// builder maps '' → null; a non-null value must be a valid email.
+const FeedCalendarEmailField = z.string().trim().email().max(254).nullable();
 
 export const CreateCalendarFeedSchema = z.object({
   name: FeedNameField,
   source: z.enum(FEED_SOURCES),
   feedUrl: FeedUrlField,
+  calendarEmail: FeedCalendarEmailField.optional(),
   syncCadenceMin: FeedCadenceField.optional(),
 });
 
@@ -381,6 +386,7 @@ export const UpdateCalendarFeedSchema = z
     name: FeedNameField.optional(),
     source: z.enum(FEED_SOURCES).optional(),
     feedUrl: FeedUrlField.optional(),
+    calendarEmail: FeedCalendarEmailField.optional(),
     syncCadenceMin: FeedCadenceField.optional(),
   })
   .refine(
@@ -388,6 +394,7 @@ export const UpdateCalendarFeedSchema = z
       v.name !== undefined ||
       v.source !== undefined ||
       v.feedUrl !== undefined ||
+      v.calendarEmail !== undefined ||
       v.syncCadenceMin !== undefined,
     { message: 'at least one field required' },
   );
@@ -404,6 +411,14 @@ export function formDataToCalendarFeedPayload(form: FormData): Record<string, un
   setStr('name');
   setStr('source');
   setStr('feedUrl');
+  // calendarEmail is present-but-clearable: when the field is rendered (it
+  // always is on add/edit), an empty value means "no filter / clear it"
+  // (null), distinct from feedUrl where blank means "keep current".
+  if (form.has('calendarEmail')) {
+    const raw = form.get('calendarEmail');
+    out.calendarEmail =
+      typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
+  }
   const cadence = form.get('syncCadenceMin');
   if (typeof cadence === 'string' && cadence !== '') {
     out.syncCadenceMin = Number.parseInt(cadence, 10);
