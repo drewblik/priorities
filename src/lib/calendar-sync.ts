@@ -17,6 +17,12 @@ export type ParsedEvent = {
   startTime: Date;
   endTime: Date;
   allDay: boolean;
+  /** M21 Phase 2. false = firmly on your calendar (accepted / busy / you
+   *  organized it) — hard immovable block. true = on your calendar but you
+   *  haven't firmly accepted (tentative / no RSVP) — STILL hard-blocks, but
+   *  the UI flags it amber as an RSVP nudge. Events you declined or that
+   *  publish as free are not stored at all (see `classifyVevent`). */
+  tentative: boolean;
 };
 
 export type SyncFeedResult = {
@@ -178,6 +184,82 @@ export function formatRsvpDebug(d: RsvpDebug): string {
   return lines.join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// M21 Phase 2 — accepted-only filter.
+//
+// Decides, per VEVENT, whether to store the event and whether to flag it
+// `tentative`. Policy locked with the owner (PROJECT-STATUS § M21):
+//
+//   • STATUS:CANCELLED            → drop (always, opt-in or not).
+//   • Feed has no configured email (`calendar_email` NULL) → import every
+//     event unchanged (pre-M21 behavior; the owner's "Test" feed is opt-out
+//     by leaving the address blank).
+//   • Your ATTENDEE PARTSTAT, when the feed exposes it (authoritative):
+//       ACCEPTED / you are ORGANIZER → keep, hard block.
+//       TENTATIVE / NEEDS-ACTION     → keep, `tentative` (you forget to RSVP;
+//                                       owner wants these — still blocks).
+//       DECLINED / DELEGATED         → drop.
+//   • Outlook-published feeds strip attendees entirely (Phase-1 diagnostic
+//     proved has-attendees 0/N), so fall back to the free/busy publication
+//     that IS present:
+//       X-MICROSOFT-CDO-BUSYSTATUS  FREE → drop · TENTATIVE → `tentative`
+//                                   BUSY / OOF → keep, hard block.
+//       then TRANSP TRANSPARENT      → drop.
+//   • Opted-in but the feed carries NO RSVP/busy signal for this event →
+//     SAFE DEFAULT: keep as a hard block. Never silently hide a real meeting.
+//
+// Honest limitation (disclosed to the owner): with attendees stripped we
+// infer "declined" from "published as free". A meeting declined but still
+// published as Busy/Tentative is indistinguishable from a real one — there
+// is no data to separate them. In practice Outlook sets declined → free.
+// ---------------------------------------------------------------------------
+
+export type EventClassification = { drop: boolean; tentative: boolean };
+
+const KEEP_HARD: EventClassification = { drop: false, tentative: false };
+const KEEP_TENTATIVE: EventClassification = { drop: false, tentative: true };
+const DROP: EventClassification = { drop: true, tentative: false };
+
+export function classifyVevent(
+  ve: ICAL.Component,
+  calendarEmail: string | null,
+): EventClassification {
+  // Unambiguous "this event is off" — drop regardless of opt-in.
+  if (up(ve.getFirstPropertyValue('status')) === 'CANCELLED') return DROP;
+
+  const email = calendarEmail ? calendarEmail.trim().toLowerCase() : null;
+  // Opt-in gate: no address on this feed → import everything unchanged.
+  if (!email) return KEEP_HARD;
+
+  // Primary signal: your own ATTENDEE PARTSTAT (authoritative when present).
+  let matchedPs: string | null = null;
+  for (const a of ve.getAllProperties('attendee')) {
+    if (calAddr(a.getFirstValue()) === email) {
+      const ps = a.getParameter('partstat');
+      matchedPs = up(Array.isArray(ps) ? ps[0] : ps) ?? 'NEEDS-ACTION';
+      break;
+    }
+  }
+  if (matchedPs != null) {
+    if (matchedPs === 'DECLINED' || matchedPs === 'DELEGATED') return DROP;
+    if (matchedPs === 'ACCEPTED') return KEEP_HARD;
+    return KEEP_TENTATIVE; // TENTATIVE / NEEDS-ACTION
+  }
+  const org = ve.getFirstProperty('organizer');
+  if (org && calAddr(org.getFirstValue()) === email) return KEEP_HARD;
+
+  // No PARTSTAT for you (Outlook-published feed) → free/busy fallback.
+  const xcdo = up(ve.getFirstPropertyValue('x-microsoft-cdo-busystatus'));
+  if (xcdo === 'FREE') return DROP;
+  if (xcdo === 'TENTATIVE') return KEEP_TENTATIVE;
+  if (xcdo === 'BUSY' || xcdo === 'OOF') return KEEP_HARD;
+
+  if (up(ve.getFirstPropertyValue('transp')) === 'TRANSPARENT') return DROP;
+
+  // Opted-in but no signal at all → safe default: keep as a hard block.
+  return KEEP_HARD;
+}
+
 // Two attempts at 25s each (≈50s worst case, under Vercel Hobby's 60s
 // function ceiling). Outlook published .ics endpoints are slow on a cold
 // request but the fetch primes a server-side cache, so the retry usually
@@ -236,12 +318,19 @@ function conciseError(err: unknown): string {
 // only filter + Vercel Pro 5-min ceiling) is the next calendar change.
 const MAX_PARSED_EVENTS = 1500;
 
-/** Sync horizon — past 7 days through next 35. Tightened from 60 so a huge
- *  recurring calendar stays parseable/writable under the 60s Hobby ceiling;
- *  Day/Week planning + conflict detection are all near-term. Late-quarter
- *  (>5wk out) feed visibility returns with the accepted-only filter. */
+/** Sync horizon — past 7 days through next 45. M21 Phase 2 partially
+ *  restores this from the interim 35 (toward the TDD's 60). NOT a full
+ *  restore: the diagnostic showed the accepted-only filter drops only ~5%
+ *  of this feed (the FREE bucket); the dominant Busy/Tentative volume is
+ *  kept, so the filter did NOT cut volume the way the original plan assumed.
+ *  Dropping declined/free series before recurrence expansion buys some
+ *  headroom (a dropped recurring VEVENT no longer expands), but 60 still
+ *  risks the parse/write timeout that forced the original 60→35 cut. 45 is
+ *  the measured middle, well under the 60s Hobby ceiling with the 1500-event
+ *  cap unchanged. Full restore stays gated on the Vercel Pro / paginated-
+ *  ingestion backlog item. */
 export function getSyncHorizon(now: Date = new Date()): { start: Date; end: Date } {
-  return { start: addDays(now, -7), end: addDays(now, 35) };
+  return { start: addDays(now, -7), end: addDays(now, 45) };
 }
 
 /**
@@ -291,6 +380,13 @@ export function parseIcs(
     const event = new ICAL.Event(vevent);
     if (!event.uid) continue;
 
+    // M21 Phase 2 filter. Classify once per VEVENT (RSVP/busy lives on the
+    // master, same as the diagnostic). Dropping here — before recurrence
+    // expansion — also means a declined/free recurring series never expands
+    // into thousands of occurrences (the horizon-headroom win).
+    const cls = classifyVevent(vevent, calendarEmail);
+    if (cls.drop) continue;
+
     if (event.isRecurring()) {
       const iterator = event.iterator();
       // Cap iterations defensively in case of malformed RRULE without UNTIL/COUNT.
@@ -312,6 +408,7 @@ export function parseIcs(
             startTime: occ.startDate.toJSDate(),
             endTime: occ.endDate.toJSDate(),
             allDay,
+            tentative: cls.tentative,
           });
         } catch {
           // Some recurrence-id exceptions throw; skip and continue.
@@ -330,6 +427,7 @@ export function parseIcs(
         startTime: start,
         endTime: end,
         allDay,
+        tentative: cls.tentative,
       });
     }
   }
@@ -399,6 +497,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
         startTime: e.startTime,
         endTime: e.endTime,
         allDay: e.allDay,
+        tentative: e.tentative,
         lastSyncedAt: startedAt,
         removedFromSourceAt: null,
       }));
@@ -414,6 +513,7 @@ export async function syncFeed(config: CalendarFeedConfig): Promise<SyncFeedResu
               startTime: sql`excluded.start_time`,
               endTime: sql`excluded.end_time`,
               allDay: sql`excluded.all_day`,
+              tentative: sql`excluded.tentative`,
               lastSyncedAt: sql`excluded.last_synced_at`,
               removedFromSourceAt: sql`NULL`,
             },

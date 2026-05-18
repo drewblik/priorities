@@ -131,10 +131,10 @@ export default async function CalendarSettingsPage({
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary"
             />
             <span className="text-xs text-muted-foreground">
-              Optional. Used to read your RSVP on each event. Leave blank to import
-              every event (current behavior). Setting it doesn&apos;t filter
-              anything yet — it populates the sync diagnostic below so the
-              accepted-only filter can be tuned to this feed.
+              Optional. Set your address to filter this feed to meetings you&apos;re
+              actually on: declined / shown-as-free events are hidden, and ones you
+              haven&apos;t RSVP&apos;d to show amber (they still block the slot — they&apos;re
+              your nudge to respond). Leave blank to import every event unchanged.
             </span>
           </label>
           <label className="block space-y-1">
