@@ -21,6 +21,19 @@ export type MasterChatInitial = {
   oldestCreatedAt: string | null;
   /** True iff there could be older messages beyond the initial page. */
   hasMoreOlder: boolean;
+  /** M21 Phase 3: when arriving from /conflicts?seed=conflicts, the
+   *  composer is pre-filled with this editable reschedule request. It is
+   *  never auto-sent — the user reviews/edits and taps Send. Null
+   *  otherwise. */
+  seededComposerText: string | null;
+  /** Display-only opener bubble (shown only when chat history is empty)
+   *  explaining the seeded conflict-resolve flow. Never sent to the
+   *  model. Null when not arriving via the conflict-resolve flow. */
+  seededOpener: {
+    text: string;
+    conflictCount: number;
+    omittedCount: number;
+  } | null;
 };
 
 type DisplayMessage = {
@@ -40,7 +53,7 @@ type Banner =
 export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
   const router = useRouter();
   const [messages, setMessages] = useState<DisplayMessage[]>(() => initial.initialMessages);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => initial.seededComposerText ?? '');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<MasterChatResponse | null>(null);
@@ -108,7 +121,6 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
     if (!input.trim() || busy) return;
 
     const userText = input.trim();
-    setInput('');
     setBanner(null);
     setPreview(null);
     // Optimistically push the user bubble; on any non-success path below
@@ -187,8 +199,12 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
       });
     } finally {
       setBusy(false);
-      if (!succeeded) {
-        // Roll back the optimistic user bubble — the send didn't land.
+      if (succeeded) {
+        setInput('');
+      } else {
+        // Roll back the optimistic user bubble — the send didn't land —
+        // and keep the composer text so a transient failure (lock_busy,
+        // cost_blocked) doesn't discard a seeded/typed message.
         setMessages((prev) => prev.slice(0, -1));
       }
     }
@@ -298,12 +314,18 @@ export function MasterChatPanel({ initial }: { initial: MasterChatInitial }) {
         ) : null}
 
         {messages.length === 0 ? (
-          <li className="rounded-md bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap">
-            Ask the council anything. Examples:
-            {'\n'}• &ldquo;Add note to Chef: try Korean BBQ next week.&rdquo;
-            {'\n'}• &ldquo;Skip tomorrow&apos;s gym and reschedule to Friday 5pm.&rdquo;
-            {'\n'}• &ldquo;Mark today&apos;s morning routine as done.&rdquo;
-          </li>
+          initial.seededOpener ? (
+            <li className="rounded-md border border-amber-600/30 bg-amber-600/5 px-3 py-2 text-sm whitespace-pre-wrap text-amber-800">
+              {initial.seededOpener.text}
+            </li>
+          ) : (
+            <li className="rounded-md bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap">
+              Ask the council anything. Examples:
+              {'\n'}• &ldquo;Add note to Chef: try Korean BBQ next week.&rdquo;
+              {'\n'}• &ldquo;Skip tomorrow&apos;s gym and reschedule to Friday 5pm.&rdquo;
+              {'\n'}• &ldquo;Mark today&apos;s morning routine as done.&rdquo;
+            </li>
+          )
         ) : null}
         {messages.map((m, i) => (
           <li

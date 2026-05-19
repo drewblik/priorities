@@ -37,7 +37,14 @@ export default async function ConflictsPage() {
           No conflicts — your plan fits around your calendar.
         </div>
       ) : (
-        <ul className="space-y-3">
+        <>
+          <Link
+            href={`/chat?seed=conflicts&from=${encodeURIComponent('/conflicts')}`}
+            className="block rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Resolve all in Master Chat
+          </Link>
+          <ul className="space-y-3">
           {conflicts.map((c, i) => (
             <li
               key={`${c.itemId}-${i}`}
@@ -64,22 +71,16 @@ export default async function ConflictsPage() {
                   {c.calendarRange}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Link
-                  href={`/chat?from=${encodeURIComponent('/conflicts')}`}
-                  className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-                >
-                  Ask Master Chat to reschedule
-                </Link>
-              </div>
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Guided one-tap conflict resolution lands in a follow-up (M21). For
-        now, reschedule the planned item via Master Chat or its Priority.
+        The button above pre-fills a reschedule request you can edit before
+        sending; Master Chat proposes the moves and you confirm them. Your
+        calendar events are never touched.
       </p>
     </main>
   );

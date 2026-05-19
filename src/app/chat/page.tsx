@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { requireUser } from '@/auth';
 import { db } from '@/db/client';
 import { chatMessages } from '@/db/schema';
+import { findCalendarConflicts } from '@/lib/calendar-conflicts';
 import { getOrCreateMasterSession } from '@/lib/chat-sessions';
+import { buildConflictResolveMessage } from '@/lib/conflict-resolve-prompt';
 import {
   parseScreenContextFromPath,
   sanitizeFromPath,
@@ -27,6 +29,49 @@ export default async function MasterChatPage({
   const fromRaw = typeof sp.from === 'string' ? sp.from : null;
   const fromPath = sanitizeFromPath(fromRaw);
   const screenContext = parseScreenContextFromPath(fromPath);
+  const seed = typeof sp.seed === 'string' ? sp.seed : null;
+
+  // M21 Phase 3: arriving from /conflicts with ?seed=conflicts pre-fills the
+  // composer with a generated reschedule request (editable; not auto-sent)
+  // plus a display-only opener. Pure server render — no LLM call here.
+  let seededComposerText: string | null = null;
+  let seededOpener: {
+    text: string;
+    conflictCount: number;
+    omittedCount: number;
+  } | null = null;
+
+  if (seed === 'conflicts') {
+    const conflicts = await findCalendarConflicts(
+      session.user.id,
+      session.user.timezone,
+    );
+    if (conflicts.length === 0) {
+      seededOpener = {
+        text: 'No calendar conflicts right now — nothing to resolve.',
+        conflictCount: 0,
+        omittedCount: 0,
+      };
+    } else {
+      const built = buildConflictResolveMessage(conflicts);
+      seededComposerText = built.message;
+      const omittedNote =
+        built.omittedCount > 0
+          ? ` Only the first ${built.shownCount} are pre-filled — resolve` +
+            ` these, then revisit /conflicts for the rest.`
+          : '';
+      seededOpener = {
+        text:
+          `You have ${conflicts.length} calendar conflict` +
+          `${conflicts.length === 1 ? '' : 's'}. Your external calendar` +
+          ` events are immovable, so Master Chat will propose moving only` +
+          ` your own tasks/events. Review or edit the pre-filled message` +
+          ` below, then tap Send.${omittedNote}`,
+        conflictCount: conflicts.length,
+        omittedCount: built.omittedCount,
+      };
+    }
+  }
 
   const [allPriorities, chatSession] = await Promise.all([
     getPrioritiesForUser(session.user.id),
@@ -85,6 +130,8 @@ export default async function MasterChatPage({
     screenContext,
     oldestCreatedAt,
     hasMoreOlder,
+    seededComposerText,
+    seededOpener,
   };
 
   return (
