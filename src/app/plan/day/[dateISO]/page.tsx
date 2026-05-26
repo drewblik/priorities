@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/auth';
 import { extractAssistantText, loadThread } from '@/lib/chat-messages';
 import { getClosedSessions, getOrCreateSession } from '@/lib/chat-sessions';
+import { getFeedsForUser } from '@/lib/calendar-feeds';
 import { loadDayCalendarSnapshot } from '@/lib/daily-context';
 import {
   dayLabel,
@@ -51,6 +52,17 @@ export default async function DailyPlanPage({
 
   const today = todayInTz(session.user.timezone);
 
+  // Build the destination picker for the "Email me this plan" button:
+  // account email is always offered; any calendar feed with a
+  // calendar_email set is offered as a second/third option.
+  const feeds = await getFeedsForUser(session.user.id);
+  const feedDestinations = feeds
+    .filter((f) => f.calendarEmail && f.calendarEmail.trim().length > 0)
+    .map((f) => ({
+      email: f.calendarEmail as string,
+      label: `${f.name} — ${f.calendarEmail}`,
+    }));
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl space-y-5 p-6">
       <header className="flex items-start justify-between gap-3">
@@ -73,7 +85,11 @@ export default async function DailyPlanPage({
         </Link>
       </header>
 
-      <EmailPlanButton dateISO={dateISO} />
+      <EmailPlanButton
+        dateISO={dateISO}
+        accountEmail={session.user.email}
+        feedDestinations={feedDestinations}
+      />
 
       <StepNavigator dateISO={dateISO} currentStep={currentStep} />
 
