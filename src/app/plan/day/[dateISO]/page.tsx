@@ -20,6 +20,7 @@ import { ReplanModePicker } from '../../ReplanModePicker';
 import { ChatPanel, type DailyChatPanelInitial } from './ChatPanel';
 import { CaptureStepPlaceholder } from './CaptureStepPlaceholder';
 import { DayCalendar } from './DayCalendar';
+import { EmailPlanButton } from './EmailPlanButton';
 import { EndSessionPlaceholder } from './EndSessionPlaceholder';
 import { ProgressStep } from './ProgressStep';
 import { QueuePanel } from './QueuePanel';
@@ -71,6 +72,8 @@ export default async function DailyPlanPage({
           ← Today
         </Link>
       </header>
+
+      <EmailPlanButton dateISO={dateISO} />
 
       <StepNavigator dateISO={dateISO} currentStep={currentStep} />
 
