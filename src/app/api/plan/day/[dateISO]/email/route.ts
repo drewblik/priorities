@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/auth';
-import { getCalendarFeedEventsForRange } from '@/lib/calendar-feeds';
+import {
+  getCalendarFeedEventsForRange,
+  getFeedsForUser,
+} from '@/lib/calendar-feeds';
 import { dayLabel, isIsoDate } from '@/lib/daily-utils';
 import {
   buildDayPlanText,
@@ -12,14 +15,44 @@ import { getTasksForDate } from '@/lib/tasks';
 
 export const runtime = 'nodejs';
 
+function normalize(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ dateISO: string }> },
 ) {
   const session = await requireUser();
   const { dateISO } = await ctx.params;
   if (!isIsoDate(dateISO)) {
     return NextResponse.json({ error: 'invalid_date' }, { status: 400 });
+  }
+
+  // Optional destination override. If absent → account email. If present →
+  // must match the user's account email or one of their feed
+  // `calendar_email` values (case-insensitive). The client picker is
+  // convenience; this re-check is the real trust boundary.
+  const body = (await req.json().catch(() => null)) as { to?: unknown } | null;
+  const requestedTo =
+    body && typeof body.to === 'string' && body.to.trim().length > 0
+      ? body.to.trim()
+      : null;
+
+  let recipient = session.user.email;
+  if (requestedTo !== null) {
+    const feeds = await getFeedsForUser(session.user.id);
+    const allowed = new Set<string>([normalize(session.user.email)]);
+    for (const f of feeds) {
+      if (f.calendarEmail) allowed.add(normalize(f.calendarEmail));
+    }
+    if (!allowed.has(normalize(requestedTo))) {
+      return NextResponse.json(
+        { error: 'invalid_destination' },
+        { status: 400 },
+      );
+    }
+    recipient = requestedTo;
   }
 
   const tz = session.user.timezone;
@@ -55,7 +88,7 @@ export async function POST(
   const label = dayLabel(dateISO, tz);
 
   try {
-    await sendDayPlanEmail(session.user.email, label, text);
+    await sendDayPlanEmail(recipient, label, text);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'send failed';
     console.error('day-plan email failed:', message);
