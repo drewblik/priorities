@@ -41,3 +41,22 @@ export async function sendMagicLinkEmail(
     throw new Error(`Resend send failed: ${error.message}`);
   }
 }
+
+export async function sendDayPlanEmail(
+  to: string,
+  dateLabel: string,
+  bodyText: string,
+): Promise<void> {
+  const from = process.env.EMAIL_FROM ?? 'Priorities <onboarding@resend.dev>';
+
+  const { error } = await getResend().emails.send({
+    from,
+    to,
+    subject: `Plan for ${dateLabel}`,
+    text: bodyText,
+  });
+
+  if (error) {
+    throw new Error(`Resend send failed: ${error.message}`);
+  }
+}
