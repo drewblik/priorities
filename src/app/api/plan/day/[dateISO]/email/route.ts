@@ -92,7 +92,14 @@ export async function POST(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'send failed';
     console.error('day-plan email failed:', message);
-    return NextResponse.json({ error: 'send_failed' }, { status: 502 });
+    // Surface the actual error to the UI (single-user app; the only
+    // consumer is the owner). Without this the user sees a generic
+    // "Send failed" and can't tell e.g. a Resend free-tier recipient
+    // restriction from a transient network blip.
+    return NextResponse.json(
+      { error: 'send_failed', detail: message },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({ ok: true });
