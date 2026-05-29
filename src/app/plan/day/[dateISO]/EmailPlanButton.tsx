@@ -86,10 +86,13 @@ export function EmailPlanButton({
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as {
           error?: string;
+          detail?: string;
         } | null;
         const msg =
           j?.error === 'send_failed'
-            ? 'Send failed — try again in a moment.'
+            ? j?.detail
+              ? `Send failed: ${j.detail}`
+              : 'Send failed — try again in a moment.'
             : j?.error === 'invalid_date'
               ? 'Invalid date.'
               : j?.error === 'invalid_destination'
