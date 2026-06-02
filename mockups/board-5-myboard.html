@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Board — digitized whiteboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f4f5f7; --ink:#1f2226; --soft:#5b6066; --faint:#9aa0a7; --card:#fff;
+    --accent:#d9663f; --accent-soft:#fff3e6;
+    --work:#9aa0a6; --work-bg:#eceef0;
+    --health:#4f9d69; --career:#4a7fb5; --home:#d99b3f; --fun:#8a6bb0;
+    --done:#b6bbc1;
+    --line:#e6e8eb; --shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.06);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; line-height:1.4; }
+  .wrap { max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:30px; }
+  .banner { background:var(--ink); color:#fff; text-align:center; padding:9px 14px; font-size:13px; font-weight:600; }
+  .banner span { opacity:.6; font-weight:500; }
+
+  .head { padding:16px 18px 4px; display:flex; justify-content:space-between; align-items:center; }
+  .head .t { font-size:25px; font-weight:800; letter-spacing:-.02em; }
+  .head .cnt { background:#e7f4ea; color:var(--health); font-size:12px; font-weight:700; padding:6px 11px; border-radius:999px; }
+
+  .sec { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:18px 18px 9px; display:flex; align-items:center; gap:7px; }
+  .pad { padding:0 14px; }
+  .card { background:var(--card); border-radius:16px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:11px; }
+
+  /* region 1: goals */
+  .goal { font-family:'Caveat'; font-size:21px; display:flex; gap:11px; padding:6px 0; align-items:baseline; border-bottom:1px dashed var(--line); }
+  .goal:last-child { border-bottom:none; }
+  .goal .gn { font-family:'Inter'; font-size:13px; font-weight:800; color:var(--accent); width:16px; flex:0 0 auto; }
+
+  /* checkable rows w/ satisfying cross-off */
+  .item { display:flex; gap:11px; align-items:flex-start; padding:9px 0; }
+  .item + .item { border-top:1px solid #f1f2f4; }
+  .ck { width:22px; height:22px; border-radius:7px; border:2px solid #cfd3d8; flex:0 0 auto; margin-top:1px; }
+  .ck.on { background:var(--health); border-color:var(--health); position:relative; }
+  .ck.on::after { content:'✓'; color:#fff; font-size:14px; font-weight:700; position:absolute; top:0; left:4px; }
+  .item .body { flex:1; }
+  .item .main { font-size:15.5px; font-weight:600; }
+  .item .sub { font-size:12.5px; color:var(--faint); margin-top:2px; }
+  /* done state: marker strike */
+  .item.done .main { color:var(--done); position:relative; }
+  .item.done .main::after { content:''; position:absolute; left:-2px; right:-2px; top:52%; height:2.5px; background:var(--accent); border-radius:2px; transform:rotate(-1deg); opacity:.8; }
+
+  /* region 2: rolling next-actions */
+  .roll .proj { font-size:11px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; color:var(--soft); display:flex; align-items:center; gap:6px; margin-bottom:2px; }
+  .roll .histline { font-size:13px; color:var(--done); margin:0 0 6px 33px; position:relative; }
+  .roll .histline::after { content:''; position:absolute; left:0; right:0; top:50%; height:2px; background:var(--done); }
+  .helper { font-family:'Caveat'; font-size:17px; color:var(--soft); text-align:center; padding:4px 0 2px; }
+
+  /* region 3: this week / calendar-aware */
+  .suggest { background:var(--accent-soft); border:1px solid #f3d6c0; border-radius:14px; padding:13px 14px; margin-bottom:11px; }
+  .suggest .s1 { font-size:14px; font-weight:600; color:#9a4a2b; }
+  .suggest .s1 b { font-weight:800; }
+  .suggest .btns { display:flex; gap:9px; margin-top:11px; }
+  .suggest button { font:inherit; font-weight:700; font-size:13px; border:none; border-radius:10px; padding:9px 18px; }
+  .suggest .add { background:var(--accent); color:#fff; }
+  .suggest .skip { background:#fff; color:#9a4a2b; border:1px solid #e9c4b2; }
+
+  .agenda .item .tm { font-size:12px; font-weight:700; color:var(--soft); width:52px; flex:0 0 auto; padding-top:2px; }
+  .lockrow { display:flex; gap:11px; align-items:flex-start; padding:9px 0; border-top:1px solid #f1f2f4; }
+  .lockrow .tm { font-size:12px; font-weight:700; color:var(--soft); width:52px; flex:0 0 auto; padding-top:2px; }
+  .lockrow .lk { flex:1; background:var(--work-bg); border-left:3px solid var(--work); border-radius:8px; padding:7px 11px; }
+  .lockrow .lk .main { font-size:14.5px; font-weight:700; }
+  .lockrow .lk .main::before { content:'🔒 '; }
+  .lockrow .lk .sub { font-size:12px; color:var(--soft); }
+  .pdot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+
+  .targets { display:flex; gap:9px; margin-top:4px; }
+  .tt { flex:1; background:#fff; border-radius:13px; box-shadow:var(--shadow); padding:11px 12px; }
+  .tt .l { font-size:12px; font-weight:700; color:var(--soft); }
+  .tt .v { font-size:18px; font-weight:800; margin-top:3px; }
+  .tt .bar { height:6px; border-radius:3px; background:#eceef0; margin-top:7px; overflow:hidden; }
+  .tt .bar i { display:block; height:100%; }
+  .warn { background:var(--accent-soft); border-radius:12px; padding:10px 13px; font-size:13px; color:#9a4a2b; font-weight:600; margin-top:10px; }
+  .link { text-align:center; font-size:13px; font-weight:700; color:var(--career); padding:12px; }
+
+  .note { margin:16px 18px 26px; background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); font-size:14px; color:#43474c; }
+  .note b { color:var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">Concept ⑤ — Your whiteboard, digitized + calendar-aware <span>· the synthesis</span></div>
+
+    <div class="head">
+      <div class="t">My Board</div>
+      <div class="cnt">✓ 12 crossed off this week</div>
+    </div>
+
+    <!-- REGION 1: GOALS -->
+    <div class="sec">☆ 2026 Goals</div>
+    <div class="pad"><div class="card">
+      <div class="goal"><span class="gn">1</span> Make manager</div>
+      <div class="goal"><span class="gn">2</span> Run a half-marathon under 2:00</div>
+      <div class="goal"><span class="gn">3</span> Launch the side project</div>
+      <div class="goal"><span class="gn">4</span> Finally fix the bite (ortho → surgeon)</div>
+    </div></div>
+
+    <!-- REGION 2: ROLLING NEXT-ACTIONS -->
+    <div class="sec">↻ Up next — one move at a time</div>
+    <div class="pad roll">
+      <div class="card">
+        <div class="item">
+          <div class="ck"></div>
+          <div class="body">
+            <div class="proj">🏖 Vacation</div>
+            <div class="histline">Buy plane tickets</div>
+            <div class="main">Plan the itinerary</div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="ck"></div>
+          <div class="body">
+            <div class="proj">🦷 Teeth</div>
+            <div class="histline">Saw the orthodontist</div>
+            <div class="main">Book oral-surgeon consult</div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="ck"></div>
+          <div class="body">
+            <div class="proj">💻 Side project</div>
+            <div class="main">Outline the landing page</div>
+          </div>
+        </div>
+      </div>
+      <div class="helper">Cross one off → I'll ask “what's the next step?” ✍️</div>
+    </div>
+
+    <!-- REGION 3: THIS WEEK / CALENDAR-AWARE -->
+    <div class="sec">🗓 This week — fit around work</div>
+    <div class="pad">
+      <div class="suggest">
+        <div class="s1">I found <b>Thu 4:00–5:30</b> open after your Acme call. Add your <b>deep-work</b> block there?</div>
+        <div class="btns">
+          <button class="add">Add it</button>
+          <button class="skip">Skip</button>
+        </div>
+      </div>
+
+      <div class="card agenda">
+        <div class="item done">
+          <div class="tm">6:30a</div>
+          <div class="body"><div class="main"><span class="pdot" style="background:var(--health)"></span>Gym</div></div>
+          <div class="ck on"></div>
+        </div>
+        <div class="lockrow">
+          <div class="tm">11:00a</div>
+          <div class="lk"><div class="main">Client call — Acme</div><div class="sub">Outlook · locked</div></div>
+        </div>
+        <div class="item">
+          <div class="tm">3:30p</div>
+          <div class="body"><div class="main"><span class="pdot" style="background:var(--career)"></span>Deep work: finish deck</div><div class="sub">Career · moved here when the 2pm call landed</div></div>
+          <div class="ck"></div>
+        </div>
+        <div class="item">
+          <div class="tm">6:00p</div>
+          <div class="body"><div class="main"><span class="pdot" style="background:var(--home)"></span>Meal prep — salmon</div></div>
+          <div class="ck"></div>
+        </div>
+      </div>
+
+      <div class="targets">
+        <div class="tt">
+          <div class="l"><span class="pdot" style="background:var(--career)"></span>Deep work</div>
+          <div class="v">6<span style="font-size:12px; color:var(--faint)"> / 10h</span></div>
+          <div class="bar"><i style="width:60%; background:var(--career)"></i></div>
+        </div>
+        <div class="tt">
+          <div class="l"><span class="pdot" style="background:var(--health)"></span>Gym</div>
+          <div class="v">2<span style="font-size:12px; color:var(--faint)"> / 3</span></div>
+          <div class="bar"><i style="width:66%; background:var(--health)"></i></div>
+        </div>
+      </div>
+
+      <div class="warn">⚠️ Side project has 0 of 2 hrs this week — no open slots left. Bump a gym day, or carry it to next week?</div>
+      <div class="link">See full day →</div>
+    </div>
+
+    <div class="note">
+      <b>This is your whiteboard, exactly.</b> Three regions: your <b>2026 Goals</b> (north star), <b>Up next</b> (the rolling bullets — cross one off and it asks for the next step, just like erasing "buy tickets" and writing "plan itinerary"), and <b>This week</b>, the only region that knows your work calendar.<br><br>
+      In region 3: 🔒 work blocks come from your read-only Outlook feed; priority blocks get <b>suggested into the gaps</b> and nothing moves until you tap <b>Add it</b> (suggest-and-approve). Some priorities are flexible ("deep work: 10 hrs, fit anywhere"), some have windows ("gym = mornings"). The honest scoreboard tells you what <b>won't fit</b>.<br><br>
+      And the whole point — <b>checking things off</b> — is everywhere, with the satisfying strike. Unlike the whiteboard, nothing you write ever falls off or gets forgotten.
+    </div>
+  </div>
+</body>
+</html>
