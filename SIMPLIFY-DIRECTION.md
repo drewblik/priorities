@@ -1,79 +1,86 @@
-# Priorities → "Fit": Simplification Direction
+# Priorities → "Rocket Money for your goals": Simplification Direction
 
-> **Status:** Exploration / proposed pivot (2026-06-02). Not yet building. Captures the direction worked out with the owner so it doesn't evaporate. Supersedes nothing yet — `PROJECT-STATUS.md` and the TDD still describe the shipped v1. If this direction is adopted, those get reshaped around it.
+> **Status:** Exploration / proposed pivot (2026-06-02). Not yet building. Captures the direction worked out with the owner through structured Q&A so it doesn't evaporate. Supersedes nothing yet — `PROJECT-STATUS.md` and the TDD still describe the shipped v1. If adopted, those get reshaped around this.
 
 ## Why pivot
 
-The shipped v1 is a planning operating system: a council of per-priority chatbots, three nested planning rituals (Quarter / Week / Day), a master-chat router, onboarding coach, re-planning modes, cost dashboards. It works — all 20 milestones verified — but it's **too Type A.** The owner reaches for a physical whiteboard instead.
+The shipped v1 is a planning operating system (council of per-priority chatbots, three nested planning rituals, master-chat router, onboarding coach, cost dashboards). All 20 milestones verified — but it's **too Type A.** The owner reaches for a physical whiteboard instead.
 
-**The real job, in the owner's words:** get personal priorities done around a *busy, constantly-changing consultant work calendar* — and feel the satisfaction of *crossing things off*.
+We then pressure-tested the idea hard (3 rounds of multiple-choice interrogation, including "why isn't this just Apple Reminders?"). The answers moved the concept decisively **away from an auto-scheduler** and toward a **watchdog**.
 
-The whiteboard isn't the problem. It's the spec.
+## What it actually is: a watchdog for your goals
 
-## The product: a digitized whiteboard that schedules itself around work
+Like **Rocket Money** — which doesn't ask you to operate a budget, it passively watches and pings you ("you're over budget," "this bill went up") — this app **watches your goals and to-dos and tells you when you're slipping.** You don't live in it; it comes to you.
 
-The owner's actual whiteboard has three regions. The app is those three regions, kept independent:
+**Three jobs, in priority order:**
+1. **Never forget** (the #1 pain) — frictionless capture of anything, from anywhere.
+2. **Show the truth about your goals** (the core differentiator) — the honest scoreboard Reminders can't show: are you actually moving each 2026 goal, or just doing maintenance?
+3. **Proactively flag slipping** — push you when a goal is going cold, a task is stale, or you're behind pace.
 
-1. **2026 Goals** — a short north-star list, written once, mostly static.
-2. **Up next** — one rolling next-action per project. Cross it off → the app *suggests* the next step, owner confirms or edits. (Mirrors erasing "buy plane tickets" and writing "plan itinerary," but keeps the history instead of wiping it.)
-3. **This week** — the only calendar-aware region.
+The calendar is a **thin supporting actor**, not the engine.
 
-The payoff that must survive everything: **crossing things off.**
+## The model
 
-## Core model decision: goals + maintenance replace "priorities"
+- **Goals + a "Life maintenance" bucket are the only organizing layer.** No separate "priorities" list. Every captured item links to a goal or to maintenance. This is what powers the scoreboard.
+- **Capture → inbox → file.** Items arrive via text/voice/quick-add, land in one inbox, get tied to a goal (app suggests, owner tweaks).
+- **Rolling next-actions.** One live next-step per project; cross it off → app suggests the next step, owner confirms/edits.
+- **The scoreboard** is the home screen and the soul: per-goal pace/status (Rocket-Money-style bars), plus maintenance.
+- **Nudges** push when triggers fire; each nudge offers snooze / plan / dismiss.
 
-- Every next-action and time-block **links to a Goal or to "Life maintenance."**
-- This **collapses two layers into one** — there is no separate "priorities" list anymore. Goals (+ the maintenance bucket) are the only organizing layer.
-- Enables an honest scoreboard: time/effort toward each goal vs. plain maintenance.
-- Linking is lightweight (a tag/color on each item), never a rollup hierarchy to manage.
+## ⚠️ The make-or-break risk (design around THIS)
 
-## How the calendar works
+Rocket Money's data is automatic. **This app's data is not** — it depends on the owner checking things off and answering check-ins. **A scoreboard fed by stale data lies**, and a scoreboard that cries "behind!" when you're not is *worse than nothing* — it kills trust, then gets muted, then abandoned. (This is how every tracker dies.)
 
-- **Read** the work calendar via the **Outlook .ics feed** (already built, read-only, just a URL — slips past corporate IT, which would block a two-way OAuth connection). These are the 🔒 fixed terrain.
-- **Own** priority blocks *inside the app* (optionally mirror to a *personal* Google/Apple calendar the owner controls). The app **never writes to the work calendar.**
-- **Suggest-and-approve:** the app proposes fits and re-fits; nothing moves until the owner taps accept.
-- Priorities are expressed as a **mix**: some flexible ("deep work: 10 hrs, fit anywhere"), some windowed ("gym = mornings").
-- **Everything gets a slot** — one-off next-actions included. This merges regions 2 and 3 functionally: crossing-off and scheduling become the same flow.
-  - Caveat to design: tiny tasks ("call the surgeon," 10 min) should **batch into a short daily "knock-out" window** rather than each claiming a calendar block — otherwise the day fills with fifteen one-line slots.
+**Therefore the single most important feature is the low-friction activity heartbeat:** a quick periodic **"did you get to X? (yes / a bit / no)"** check-in, plus assuming committed blocks happened unless told otherwise, plus easy crossing-off. If this loop is frictionless and the scoreboard stays honest, the app is great. If not, it's a dead tracker. **Everything else is secondary to keeping the scoreboard true.**
 
-## Locked decisions (from owner Q&A, 2026-06-02)
+## Locked decisions (owner Q&A, 2026-06-02)
 
 | Question | Decision |
 |---|---|
-| Re-fit behavior when work changes | **Suggest, owner approves** — nothing moves automatically |
-| How a priority expresses its time need | **Mix** — flexible weekly targets + preferred windows |
-| Work-calendar access | **Read-only .ics for work** (security); own blocks in-app / optional personal-calendar mirror |
-| Rolling next-step authoring | **App suggests, owner confirms** (editable) |
-| Goal ↔ action linking | **Linked** — every item ties to a Goal or "Life maintenance" |
-| What gets scheduled | **Everything gets a slot** (one-offs batched into a knock-out window) |
+| #1 pain | **Forgetting / losing track** |
+| How often work disrupts the plan | A few times a week (not hourly → no real-time auto-refit needed) |
+| Does owner follow time-blocks? | **Drifts** → blocks must be gentle, never a contract |
+| The one job | **Goal progress — "Rocket Money for my goals"** |
+| How nudges reach owner | **Push notifications** |
+| Which slip-ups to flag | Task sitting too long · behind pace on a goal · goal gone cold (**not** "fill free time") |
+| Calendar role | **Only block what I commit to** (e.g. gym); nudge everything else as a list |
+| Capture method | **All of: text-it-like-a-person, quick-add, voice** → one inbox |
+| How it knows you did something | **Combination**: check off + assume committed blocks + ask via check-in |
+| Per-goal setup effort | **App suggests target/cadence, owner tweaks** |
+| Nudge action | **Snooze / plan / dismiss** all offered |
+| Why not Apple Reminders | **Goal-truth scoreboard Reminders can't show** |
 
 ## Open details (decide during build planning)
 
-- Knock-out window mechanics + the small-task threshold (what counts as "tiny").
-- How much is **AI** vs. plain heuristics: suggesting the next step and proposing fits could be a small LLM call, or rule-based. Lean heuristic first; add AI only where it clearly helps.
-- Whether to ship the optional personal-calendar mirror in v1 or keep blocks app-only.
-- Whether goals carry their own time targets, or only the recurring commitments under them do.
+- Scoreboard form: time-based (hrs toward goal) vs task-based vs check-in-based — likely a blend.
+- Check-in cadence + how it picks what to ask about.
+- Push-notification infra (the current v1 has NONE — this is new).
+- "Text it like a person" channel: SMS (Twilio) vs a chat thread in-app vs email-in.
+- Nudge volume ceiling to prevent fatigue (the second-biggest churn risk after stale data).
+- How much is AI (parsing captures, suggesting goal links/next-steps) vs heuristic.
 
 ## Transition from the current build
 
-Nothing here is built from scratch — the v1 has the right engine buried under the wrong UI.
+The v1 has a useful engine buried under the wrong UI — but this pivot also needs **new pillars the v1 never had.**
 
-**KEEP / REPURPOSE (the engine):**
-- **Calendar feed ingestion** (`calendar-feeds.ts`, `calendar-sync.ts`, M10/M21) — read-only .ics, encrypted URL, sync, RSVP filter. This *is* the product now.
-- **Tasks/events tables + recurrence engine** (`recurrence.ts`, M8) — become the scheduled blocks + recurring commitments.
-- **Time-block overlap helper** (`time-block-overlap.ts`, M14) — the fit/conflict math.
-- **Calendar conflict detection** (`calendar-conflicts.ts`, M20) — becomes the re-fit trigger.
-- **Auth, settings, encryption** (M2/M3) — keep as-is.
-- **`priorities` table → repurpose to `goals`** — drastically slimmed columns (name, color, order, optional weekly target). Add a "Life maintenance" pseudo-goal.
+**KEEP / REPURPOSE:**
+- Calendar feed ingestion (`calendar-feeds.ts`, `calendar-sync.ts`) — read-only .ics work feed, now thin (just for committed-block conflict-dodging + knowing free time).
+- Tasks/recurrence engine (`recurrence.ts`) — committed recurring blocks.
+- Time-block overlap (`time-block-overlap.ts`) — keep committed blocks off work meetings.
+- Auth, settings, encryption (M2/M3) — as-is.
+- `priorities` table → slim into `goals` (+ a maintenance pseudo-goal).
 
-**RETIRE (the Type A layer):**
-- Per-priority chatbots: Quarter (M12), Weekly (M13), Daily (M14) planning chat.
-- The three planning rituals + `quarters` / `quarter_week_focus` tables (M7/M12).
-- Master-chat router + confirm pipeline (M16/M17).
-- Onboarding coach + council proposal (M18).
-- Re-planning mode picker (M15).
-- Per-priority memory + files + summarization (M6, M19) — the whiteboard doesn't need them.
-- Cost dashboard (M19) → reduce to a single hard cap *if* any AI remains; remove if not.
-- The "8 verbatim prompts" discipline — relax; far less prompt surface now.
+**BUILD NEW (didn't exist in v1):**
+- **Push notifications** (v1 explicitly had none) — the nudge delivery channel.
+- **Frictionless multi-channel capture** + an inbox/triage.
+- **The goal scoreboard** + pace/staleness/cold-goal detection (the watchdog logic).
+- **The periodic check-in heartbeat.**
 
-**NET:** roughly half the milestones' worth of UI and prompt machinery comes out; the calendar/time-block/recurrence core stays and gets a much simpler face.
+**RETIRE:**
+- All per-priority chatbots + the Quarter/Week/Day rituals + `quarters` tables.
+- Master-chat router, onboarding coach, re-planning picker.
+- Per-priority memory/files/summarization, cost dashboard.
+- The auto-scheduler / "fit everything into the gaps" ambition (owner drifts on blocks; only committed blocks are scheduled).
+- The "8 verbatim prompts" discipline.
+
+**NET:** most of the v1's UI and prompt machinery comes out; a slice of the calendar engine stays; and the real work shifts to three *new* pillars — capture, the honest scoreboard, and push nudges.
