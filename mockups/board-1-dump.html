@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>① The Dump</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --board: #faf7f0; --board-line: #ece5d6; --ink: #2c2a26; --ink-soft: #6b6862; --ink-faint: #9c988f;
+    --accent: #d9663f; --accent-soft: #fbeae3; --green: #4f9d69; --blue: #4a7fb5; --card: #ffffff;
+    --shadow: 0 1px 3px rgba(44,42,38,.08), 0 6px 18px rgba(44,42,38,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--board); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.45; }
+  .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .banner { background: var(--ink); color: #fff; text-align: center; padding: 9px 14px; font-size: 13px; font-weight: 600; }
+  .banner span { opacity: .65; font-weight: 500; }
+  .screen { flex: 1; }
+  .board-head { display:flex; align-items:baseline; justify-content:space-between; padding: 16px 18px 12px; }
+  .board-head .hi { font-family:'Caveat'; font-size: 30px; font-weight:700; }
+  .board-head .date { font-size:13px; color: var(--ink-faint); font-weight:600; }
+  .pad { padding: 0 18px; }
+  .section-label { font-size: 11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color: var(--ink-faint); margin: 8px 0 8px; }
+  .card { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 14px 15px; margin-bottom: 12px; }
+  .row { display:flex; gap:10px; align-items:flex-start; padding: 8px 0; }
+  .row + .row { border-top: 1px solid #f1ede4; }
+  .check { width:20px; height:20px; border-radius:6px; border:2px solid #cfc8ba; flex:0 0 auto; margin-top:1px; }
+  .check.done { background: var(--green); border-color: var(--green); position:relative; }
+  .check.done::after { content:'✓'; color:#fff; font-size:13px; position:absolute; top:-1px; left:3px; }
+  .row .txt { flex:1; font-size:15px; }
+  .row.done .txt { color: var(--ink-faint); text-decoration: line-through; }
+  .row .meta { font-size:12px; color: var(--ink-faint); }
+  .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; margin-top:6px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:600; padding: 5px 11px; border-radius:999px; background:#f1ede4; color:#6b6862; margin: 0 6px 6px 0; }
+  .scribble { font-family:'Caveat'; font-size: 23px; line-height: 1.55; color: var(--ink);
+    background: repeating-linear-gradient(transparent, transparent 38px, var(--board-line) 38px, var(--board-line) 39px);
+    padding: 6px 0; min-height: 200px; }
+  .scribble .muted { color: var(--ink-faint); }
+  .ai-strip { background: var(--accent-soft); border:1px solid #f3d6c9; border-radius:14px; padding:12px 14px; margin: 6px 0 14px; font-size:14px; color:#9a4a2b; display:flex; gap:9px; }
+  .ai-strip b { color:#7d3a20; }
+  .composer { position: sticky; bottom: 0; border-top:1px solid var(--board-line); background:var(--board); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; gap:10px; align-items:center; }
+  .composer .box { flex:1; background:#fff; border:1px solid #e0d9cb; border-radius:24px; padding:12px 16px; font-size:15px; color:var(--ink-faint); }
+  .composer .send { width:44px; height:44px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex:0 0 auto; }
+  .note { margin: 8px 18px 28px; background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); font-size:14px; color:#4a473f; }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">Concept ① — The Dump <span>· 1 of 3</span></div>
+    <div class="screen">
+      <div class="board-head">
+        <div class="hi">Your board</div>
+        <div class="date">Tue · Jun 2</div>
+      </div>
+      <div class="pad">
+        <div class="section-label">✍️ Brain dump</div>
+        <div class="scribble">
+          <div>- gym mon / wed / fri</div>
+          <div>- finish the deck for Thursday</div>
+          <div>- meal prep: chili sun, salmon tue</div>
+          <div>- call dentist!!</div>
+          <div class="muted">- tap to keep writing…</div>
+        </div>
+
+        <div class="ai-strip">
+          <span>✨</span>
+          <div>I tidied your dump into the cards below and remembered it all. <b>3 things look time-sensitive</b> — pulled up top.</div>
+        </div>
+
+        <div class="section-label">⏰ Don't forget</div>
+        <div class="card" style="padding:10px 14px">
+          <div class="row"><div class="dot" style="background:var(--accent)"></div><div class="txt">Call dentist <span class="meta">— you wrote this 3 days ago too</span></div></div>
+          <div class="row"><div class="dot" style="background:var(--blue)"></div><div class="txt">Deck due <b>Thursday</b></div></div>
+        </div>
+
+        <div class="section-label">🗓 This week</div>
+        <div class="card">
+          <div class="row done"><div class="check done"></div><div class="txt">Gym — Mon</div></div>
+          <div class="row"><div class="check"></div><div class="txt">Gym — Wed</div></div>
+          <div class="row"><div class="check"></div><div class="txt">Gym — Fri</div></div>
+          <div class="row"><div class="check"></div><div class="txt">Finish slide deck <span class="meta">Career</span></div></div>
+        </div>
+
+        <div class="section-label">🍳 Meals</div>
+        <div class="card" style="padding:12px 14px">
+          <span class="chip">Sun · Chili</span>
+          <span class="chip">Tue · Salmon</span>
+          <span class="chip" style="background:var(--accent-soft); color:var(--accent)">+ plan rest</span>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>The Dump</b> — closest to a real whiteboard. You write whatever, however; the app mirrors it back into tidy cards and flags what's time-sensitive. Lowest friction to capture; the app does the organizing.<br><br>
+        <b>Gone vs. today's app:</b> no council of chatbots, no Quarter/Week/Day rituals, no queues, no priority detail pages, no calendar machinery. Priorities live as quiet background tags (the little "Career" label), not screens you manage.
+      </div>
+    </div>
+    <div class="composer">
+      <div class="box">Add anything…</div>
+      <div class="send">↑</div>
+    </div>
+  </div>
+</body>
+</html>

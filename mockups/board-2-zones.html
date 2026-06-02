@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>② Zones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --board: #faf7f0; --board-line: #ece5d6; --ink: #2c2a26; --ink-soft: #6b6862; --ink-faint: #9c988f;
+    --accent: #d9663f; --accent-soft: #fbeae3; --green: #4f9d69; --blue: #4a7fb5; --card: #ffffff;
+    --shadow: 0 1px 3px rgba(44,42,38,.08), 0 6px 18px rgba(44,42,38,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--board); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.45; }
+  .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .banner { background: var(--ink); color: #fff; text-align: center; padding: 9px 14px; font-size: 13px; font-weight: 600; }
+  .banner span { opacity: .65; font-weight: 500; }
+  .screen { flex: 1; }
+  .board-head { display:flex; align-items:baseline; justify-content:space-between; padding: 16px 18px 12px; }
+  .board-head .hi { font-family:'Caveat'; font-size: 30px; font-weight:700; }
+  .board-head .date { font-size:13px; color: var(--ink-faint); font-weight:600; }
+  .pad { padding: 0 18px; }
+  .check { width:18px; height:18px; border-radius:6px; border:2px solid #cfc8ba; flex:0 0 auto; margin-top:1px; display:inline-block; }
+  .check.done { background: var(--green); border-color: var(--green); position:relative; }
+  .check.done::after { content:'✓'; color:#fff; font-size:12px; position:absolute; top:-2px; left:3px; }
+  .zone { border:1.5px dashed #d8d0c0; border-radius:16px; padding:14px 15px; margin-bottom:13px; background: rgba(255,255,255,.5); }
+  .zone h3 { font-family:'Caveat'; font-size:24px; font-weight:700; margin-bottom:8px; }
+  .zone .line { font-size:15px; padding:6px 0; color:var(--ink); display:flex; gap:9px; align-items:flex-start; }
+  .zone .line .b { color:var(--ink-faint); }
+  .day { display:flex; gap:11px; padding:8px 0; border-top:1px solid #efe9dd; }
+  .day:first-child { border-top:none; }
+  .day .dname { font-weight:700; font-size:12px; width:38px; color:var(--ink-soft); flex:0 0 auto; padding-top:2px; }
+  .day .ditems { flex:1; font-size:15px; }
+  .day .ditems span { display:block; padding:1px 0; }
+  .composer { position: sticky; bottom: 0; border-top:1px solid var(--board-line); background:var(--board); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; gap:10px; align-items:center; }
+  .composer .box { flex:1; background:#fff; border:1px solid #e0d9cb; border-radius:24px; padding:12px 16px; font-size:15px; color:var(--ink-faint); }
+  .composer .send { width:44px; height:44px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex:0 0 auto; }
+  .note { margin: 8px 18px 28px; background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); font-size:14px; color:#4a473f; }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">Concept ② — Zones <span>· 2 of 3</span></div>
+    <div class="screen">
+      <div class="board-head">
+        <div class="hi">This week</div>
+        <div class="date">Jun 1 – 7</div>
+      </div>
+      <div class="pad">
+        <div class="zone">
+          <h3>🗓 Schedule</h3>
+          <div class="day"><div class="dname">MON</div><div class="ditems"><span>Gym · deck work</span></div></div>
+          <div class="day"><div class="dname">TUE</div><div class="ditems"><span>Deep work block</span><span>Salmon dinner</span></div></div>
+          <div class="day"><div class="dname">WED</div><div class="ditems"><span>Gym</span></div></div>
+          <div class="day"><div class="dname">THU</div><div class="ditems"><span style="color:var(--accent); font-weight:600">Deck DUE</span></div></div>
+          <div class="day"><div class="dname">FRI</div><div class="ditems"><span>Gym</span></div></div>
+          <div class="day"><div class="dname">SAT</div><div class="ditems"><span style="color:var(--ink-faint)">—</span></div></div>
+          <div class="day"><div class="dname">SUN</div><div class="ditems"><span>Make chili (meal prep)</span></div></div>
+        </div>
+
+        <div class="zone">
+          <h3>🍳 Eating</h3>
+          <div class="line"><span class="b">·</span> Chili (cook Sun, lasts to Wed)</div>
+          <div class="line"><span class="b">·</span> Salmon + greens — Tue</div>
+          <div class="line" style="color:var(--ink-faint)"><span class="b">·</span> Thu–Sat: ?? <em>&nbsp;tap to fill</em></div>
+        </div>
+
+        <div class="zone">
+          <h3>✅ To-do</h3>
+          <div class="line"><span class="check"></span> Finish slide deck</div>
+          <div class="line"><span class="check"></span> Call dentist</div>
+          <div class="line"><span class="check done"></span> <span style="color:var(--ink-faint); text-decoration:line-through">Reply to Sam</span></div>
+        </div>
+
+        <div class="zone">
+          <h3>💭 On my mind</h3>
+          <div class="line" style="font-family:'Caveat'; font-size:20px">Side project — pick back up after the deck ships?</div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Zones</b> — a digital bullet-journal spread. You write straight into gentle dashed areas (Schedule / Eating / To-do / On my mind). More visible structure than The Dump, so it's easier to scan the week at a glance — but you keep each zone yourself; the app nudges from the composer instead of rewriting your words.<br><br>
+        <b>Best if</b> you like seeing the week laid out and trust yourself to keep it tidy.
+      </div>
+    </div>
+    <div class="composer">
+      <div class="box">Jot something…</div>
+      <div class="send">↑</div>
+    </div>
+  </div>
+</body>
+</html>
