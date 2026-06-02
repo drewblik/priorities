@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fit — priorities around work</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f4f5f7; --ink:#1f2226; --soft:#5b6066; --faint:#9aa0a7; --card:#fff;
+    --accent:#d9663f; --accent-soft:#fff3e6;
+    --work:#9aa0a6; --work-bg:#eceef0;
+    --health:#4f9d69; --health-bg:#e6f4ea;
+    --career:#4a7fb5; --career-bg:#e6effb;
+    --home:#d99b3f; --home-bg:#fbf1dc;
+    --line:#e6e8eb; --shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.06);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; line-height:1.4; }
+  .wrap { max-width:480px; margin:0 auto; min-height:100vh; }
+  .banner { background:var(--ink); color:#fff; text-align:center; padding:9px 14px; font-size:13px; font-weight:600; }
+  .banner span { opacity:.6; font-weight:500; }
+
+  .head { padding:16px 18px 10px; display:flex; justify-content:space-between; align-items:flex-end; }
+  .head .t { font-size:24px; font-weight:800; letter-spacing:-.02em; }
+  .head .d { font-size:13px; color:var(--soft); font-weight:600; }
+
+  /* week strip */
+  .week { display:flex; gap:6px; padding:0 14px 12px; }
+  .wd { flex:1; text-align:center; padding:7px 0 6px; border-radius:10px; background:#fff; box-shadow:var(--shadow); }
+  .wd .n { font-size:10px; font-weight:700; color:var(--faint); text-transform:uppercase; }
+  .wd .num { font-size:15px; font-weight:700; margin-top:1px; }
+  .wd .fill { height:3px; border-radius:2px; margin:5px 5px 0; background:#e2e4e7; }
+  .wd.today { background:var(--ink); } .wd.today .n,.wd.today .num { color:#fff; }
+  .wd .fill.f7 { background:linear-gradient(90deg,var(--career) 70%,#e2e4e7 70%); }
+  .wd .fill.f4 { background:linear-gradient(90deg,var(--health) 40%,#e2e4e7 40%); }
+  .wd .fill.f9 { background:linear-gradient(90deg,var(--accent) 90%,#e2e4e7 90%); }
+
+  /* re-fit banner */
+  .refit { margin:4px 14px 14px; background:var(--accent-soft); border:1px solid #f3d6c0; border-radius:14px; padding:13px 14px; }
+  .refit .r1 { font-size:14px; font-weight:600; color:#9a4a2b; display:flex; gap:8px; }
+  .refit .r2 { font-size:13px; color:#7d3a20; margin:7px 0 11px; padding-left:25px; }
+  .refit .r2 b { font-weight:700; }
+  .refit .btns { display:flex; gap:9px; padding-left:25px; }
+  .refit button { font:inherit; font-weight:700; font-size:13px; border:none; border-radius:10px; padding:9px 16px; }
+  .refit .keep { background:var(--accent); color:#fff; }
+  .refit .undo { background:#fff; color:#9a4a2b; border:1px solid #e9c4b2; }
+
+  /* timeline */
+  .tlwrap { padding:0 14px; }
+  .tl { position:relative; margin-left:42px; height:740px;
+        background:repeating-linear-gradient(#edeff1 0 1px, transparent 1px 56px); }
+  .hr { position:absolute; left:-42px; width:36px; text-align:right; font-size:10.5px; color:var(--faint); font-weight:600; }
+  .blk { position:absolute; left:6px; right:2px; border-radius:9px; padding:6px 11px; box-shadow:var(--shadow); overflow:hidden; }
+  .blk .bt { font-size:13.5px; font-weight:700; line-height:1.2; }
+  .blk .bs { font-size:11.5px; color:var(--soft); margin-top:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .blk.work { background:var(--work-bg); border-left:4px solid var(--work); }
+  .blk.work .bt::before { content:'🔒 '; }
+  .blk.work.new { background:var(--accent-soft); border-left:4px solid var(--accent); }
+  .blk.health { background:var(--health-bg); border-left:4px solid var(--health); }
+  .blk.career { background:var(--career-bg); border-left:4px solid var(--career); }
+  .blk.home   { background:var(--home-bg);   border-left:4px solid var(--home); }
+  .tagp { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; }
+  .tagp.moved { background:var(--accent); color:#fff; }
+  .tagp.fit { background:rgba(0,0,0,.06); color:var(--soft); }
+
+  /* this week targets */
+  .sec { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:18px 18px 8px; }
+  .targets { padding:0 14px 8px; }
+  .tcard { background:#fff; border-radius:14px; box-shadow:var(--shadow); padding:13px 15px; margin-bottom:10px; }
+  .tcard .th { display:flex; justify-content:space-between; align-items:center; }
+  .tcard .nm { font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .tcard .nm .pd { width:9px; height:9px; border-radius:50%; }
+  .tcard .vv { font-size:13px; color:var(--soft); font-weight:600; }
+  .bar { height:7px; border-radius:4px; background:#eceef0; margin-top:9px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:4px; }
+  .dots { display:flex; gap:5px; margin-top:9px; }
+  .dots b { width:13px; height:13px; border-radius:50%; }
+  .warn { margin-top:9px; font-size:12.5px; color:#9a4a2b; background:var(--accent-soft); border-radius:9px; padding:7px 10px; font-weight:600; }
+
+  .bottom { position:sticky; bottom:0; background:linear-gradient(180deg,rgba(244,245,247,0),var(--bg) 30%); padding:10px 14px calc(14px + env(safe-area-inset-bottom)); }
+  .bottom button { width:100%; font:inherit; font-weight:700; font-size:15px; border:none; border-radius:14px; padding:15px; background:var(--ink); color:#fff; box-shadow:var(--shadow); }
+
+  .note { margin:6px 18px 26px; background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); font-size:14px; color:#43474c; }
+  .note b { color:var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">Fit — get priorities done around a busy work calendar <span>· core screen</span></div>
+
+    <div class="head">
+      <div class="t">Today</div>
+      <div class="d">Tue · Jun 2</div>
+    </div>
+
+    <div class="week">
+      <div class="wd"><div class="n">M</div><div class="num">1</div><div class="fill f4"></div></div>
+      <div class="wd today"><div class="n">T</div><div class="num">2</div><div class="fill f9"></div></div>
+      <div class="wd"><div class="n">W</div><div class="num">3</div><div class="fill f7"></div></div>
+      <div class="wd"><div class="n">T</div><div class="num">4</div><div class="fill f9"></div></div>
+      <div class="wd"><div class="n">F</div><div class="num">5</div><div class="fill f7"></div></div>
+      <div class="wd"><div class="n">S</div><div class="num">6</div><div class="fill"></div></div>
+      <div class="wd"><div class="n">S</div><div class="num">7</div><div class="fill f4"></div></div>
+    </div>
+
+    <div class="refit">
+      <div class="r1"><span>🔄</span><span>Your work calendar just changed.</span></div>
+      <div class="r2">A <b>2:00 "Client sync — Acme"</b> landed on the spot your deep-work block was in. I re-fit your day: moved <b>Finish deck → 3:30–5:30</b>.</div>
+      <div class="btns">
+        <button class="keep">Keep it</button>
+        <button class="undo">Undo</button>
+      </div>
+    </div>
+
+    <div class="tlwrap">
+      <div class="tl">
+        <!-- hour labels -->
+        <div class="hr" style="top:-6px">6 AM</div>
+        <div class="hr" style="top:106px">8 AM</div>
+        <div class="hr" style="top:218px">10 AM</div>
+        <div class="hr" style="top:330px">12 PM</div>
+        <div class="hr" style="top:442px">2 PM</div>
+        <div class="hr" style="top:554px">4 PM</div>
+        <div class="hr" style="top:666px">6 PM</div>
+
+        <!-- blocks: 56px/hr, base 6:00 -->
+        <div class="blk health" style="top:28px; height:42px">
+          <div class="bt">Gym</div>
+          <div class="bs">6:30–7:15 · Health <span class="tagp fit">auto-fit</span></div>
+        </div>
+
+        <div class="blk work" style="top:168px; height:28px">
+          <div class="bt">Team standup</div>
+          <div class="bs">9:00–9:30 · Outlook</div>
+        </div>
+
+        <div class="blk work" style="top:280px; height:56px">
+          <div class="bt">Client call — Acme</div>
+          <div class="bs">11:00–12:00 · Outlook</div>
+        </div>
+
+        <div class="blk health" style="top:364px; height:28px">
+          <div class="bt">Lunch + walk</div>
+          <div class="bs">12:30–1:00 · Health</div>
+        </div>
+
+        <div class="blk work new" style="top:448px; height:56px">
+          <div class="bt">Client sync — Acme</div>
+          <div class="bs">2:00–3:00 · just added</div>
+        </div>
+
+        <div class="blk career" style="top:532px; height:112px">
+          <div class="bt">Finish deck</div>
+          <div class="bs">3:30–5:30 · Career <span class="tagp moved">moved ↓</span></div>
+        </div>
+
+        <div class="blk home" style="top:672px; height:42px">
+          <div class="bt">Meal prep</div>
+          <div class="bs">6:00–6:45 · Home</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">This week · how priorities are landing</div>
+    <div class="targets">
+      <div class="tcard">
+        <div class="th">
+          <div class="nm"><span class="pd" style="background:var(--career)"></span>Deep work — Career</div>
+          <div class="vv">6 of 10 hrs</div>
+        </div>
+        <div class="bar"><i style="width:60%; background:var(--career)"></i></div>
+      </div>
+
+      <div class="tcard">
+        <div class="th">
+          <div class="nm"><span class="pd" style="background:var(--health)"></span>Gym — Health</div>
+          <div class="vv">2 of 3</div>
+        </div>
+        <div class="dots">
+          <b style="background:var(--health)"></b>
+          <b style="background:var(--health)"></b>
+          <b style="background:#dfe2e5"></b>
+        </div>
+      </div>
+
+      <div class="tcard">
+        <div class="th">
+          <div class="nm"><span class="pd" style="background:var(--accent)"></span>Side project</div>
+          <div class="vv">0 of 2 hrs</div>
+        </div>
+        <div class="bar"><i style="width:4%; background:var(--accent)"></i></div>
+        <div class="warn">⚠️ No open slots left this week. Bump a gym day, or carry it to next week?</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>Fit</b> — the whole app is one job: take your <b>work calendar as fixed</b> (the 🔒 Outlook blocks) and slot your <b>priority time-blocks</b> into the gaps. When work changes — like the orange 2:00 sync that just appeared — it <b>re-fits automatically</b> and shows you exactly what moved, with one tap to keep or undo. The "This week" card is the honest scoreboard: what's landing, and what <b>won't fit</b> so you can make the call.<br><br>
+      <b>Gone vs. today's app:</b> council of chatbots, Quarter/Week/Day planning rituals, queues, onboarding coach, master-chat router. <b>Priorities</b> are just a name + a weekly time target (e.g. "Deep work: 10 hrs", "Gym: 3×"). The calendar engine is the product.
+    </div>
+
+    <div class="bottom">
+      <button>🔄 Re-fit around my calendar</button>
+    </div>
+  </div>
+</body>
+</html>
