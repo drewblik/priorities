@@ -21,11 +21,23 @@ The calendar is a **thin supporting actor**, not the engine.
 
 ## The model
 
-- **Goals + a "Life maintenance" bucket are the only organizing layer.** No separate "priorities" list. Every captured item links to a goal or to maintenance. This is what powers the scoreboard.
-- **Capture → inbox → file.** Items arrive via text/voice/quick-add, land in one inbox, get tied to a goal (app suggests, owner tweaks).
-- **Rolling next-actions.** One live next-step per project; cross it off → app suggests the next step, owner confirms/edits.
-- **The scoreboard** is the home screen and the soul: per-goal pace/status (Rocket-Money-style bars), plus maintenance.
-- **Nudges** push when triggers fire; each nudge offers snooze / plan / dismiss.
+- **Areas are the organizing layer.** A short list of areas, of three kinds: **Goals** (2026 goals, pace-tracked), **Work-clients** (each a deep task tree), and **Life maintenance** (one bucket). No separate "priorities" list. Every item belongs to an area. This powers the scoreboard.
+- **Capture deep, surface shallow.** Items can nest arbitrarily (Client → project → task → subtask), faithful to how consulting work decomposes — but the app only ever *shows* the next action per branch + the rollup. The tree exists; the owner never manages it.
+- **Rolling next-actions.** One live next-step per branch; cross it off → app suggests the next step, owner confirms/edits.
+- **The scoreboard** is the soul: per-area truth (Goals show pace bars; Work shows open/overdue + recent activity; Maintenance shows done count). It shows its own **freshness/confidence** and stays quiet when unsure.
+- **Nudges** push when triggers fire; each offers snooze / plan / dismiss.
+
+## The core daily loop (the product in one motion)
+
+1. Owner keeps their **existing desktop sticky-note log** all day (fast, local, full work detail).
+2. When convenient, **paste the dump into the app** (coexist + paste — the sticky note stays the speed-of-thought scratchpad).
+3. App **parses it**: what was *done* → updates scoreboard + marks committed blocks done; what's *left* → files into the deep tree under the right area, links to a goal where relevant.
+4. App **returns the "prettier sticky note" + day-management coaching** (overloaded afternoon, neglected client, what to point at next). **This paste→organize→coach moment is where the AI is concentrated** — not scattered across many chatbots.
+5. **Watchdog** runs in the background across all areas; **pushes** only when something genuinely slips, and only when its data is fresh enough to be sure.
+6. **Calendar stays thin:** reads work meetings (free automatic "done" data + free-time awareness), holds only committed blocks (gym).
+
+### Stale-data toolkit (simplest contact first)
+The daily paste is the heartbeat. Layered with: calendar meetings auto-counting as done (semi-automatic work data, like a bank feed); committed blocks assumed done unless skipped; one-tap reply to a push ("worked out ✅"); a weekly check-in for anything uncertain; and the **anti-lying safeguard** — surface freshness ("updated 2 days ago") and stay silent rather than fire a false "behind!" alarm.
 
 ## ⚠️ The make-or-break risk (design around THIS)
 
@@ -49,6 +61,10 @@ Rocket Money's data is automatic. **This app's data is not** — it depends on t
 | Per-goal setup effort | **App suggests target/cadence, owner tweaks** |
 | Nudge action | **Snooze / plan / dismiss** all offered |
 | Why not Apple Reminders | **Goal-truth scoreboard Reminders can't show** |
+| Primary daytime input | **Coexist + paste** — keep the desktop sticky note, paste the dump into the app periodically |
+| Nesting depth | **Capture deep, surface shallow** — store the tree, show only next-action + rollup |
+| What the paste returns | **Cleaned-up note + day-management coaching** (the concentrated AI moment) |
+| Work-data handling | **Full detail, owner-accepted risk** — design still encrypts at rest + keeps a cheap code-name escape hatch |
 
 ## Open details (decide during build planning)
 
@@ -72,7 +88,8 @@ The v1 has a useful engine buried under the wrong UI — but this pivot also nee
 
 **BUILD NEW (didn't exist in v1):**
 - **Push notifications** (v1 explicitly had none) — the nudge delivery channel.
-- **Frictionless multi-channel capture** + an inbox/triage.
+- **The paste-parse engine** — ingest a messy sticky-note dump, split done-vs-todo, file into the area tree, link to goals, and return a cleaned note + day-management coaching. **This is the central new AI feature** (and where the AI is now concentrated).
+- **Frictionless multi-channel capture** (text / voice / quick-add) + an inbox/triage, as the secondary always-on input.
 - **The goal scoreboard** + pace/staleness/cold-goal detection (the watchdog logic).
 - **The periodic check-in heartbeat.**
 
