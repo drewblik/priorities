@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Board — goal-linked</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f4f5f7; --ink:#1f2226; --soft:#5b6066; --faint:#9aa0a7; --card:#fff;
+    --accent:#d9663f; --accent-soft:#fff3e6;
+    --work:#9aa0a6; --work-bg:#eceef0;
+    --done:#b6bbc1;
+    /* goal colors */
+    --g1:#4a7fb5; --g1b:#e6effb;   /* Make manager   */
+    --g2:#4f9d69; --g2b:#e6f4ea;   /* Half-marathon  */
+    --g3:#8a6bb0; --g3b:#efe8f7;   /* Side project   */
+    --g4:#3a9da0; --g4b:#e1f3f3;   /* Fix the bite   */
+    --maint:#9aa0a7; --maintb:#eef0f2; /* Life maintenance */
+    --line:#e6e8eb; --shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.06);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; line-height:1.4; }
+  .wrap { max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:30px; }
+  .banner { background:var(--ink); color:#fff; text-align:center; padding:9px 14px; font-size:13px; font-weight:600; }
+  .banner span { opacity:.6; font-weight:500; }
+
+  .head { padding:16px 18px 4px; display:flex; justify-content:space-between; align-items:center; }
+  .head .t { font-size:25px; font-weight:800; letter-spacing:-.02em; }
+  .head .cnt { background:#e7f4ea; color:var(--g2); font-size:12px; font-weight:700; padding:6px 11px; border-radius:999px; }
+
+  .sec { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:18px 18px 9px; }
+  .pad { padding:0 14px; }
+  .card { background:var(--card); border-radius:16px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:11px; }
+
+  /* goal chips */
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+  .chip .cd { width:7px; height:7px; border-radius:50%; }
+  .chip.g1 { background:var(--g1b); color:var(--g1); } .chip.g1 .cd{background:var(--g1);}
+  .chip.g2 { background:var(--g2b); color:var(--g2); } .chip.g2 .cd{background:var(--g2);}
+  .chip.g3 { background:var(--g3b); color:var(--g3); } .chip.g3 .cd{background:var(--g3);}
+  .chip.g4 { background:var(--g4b); color:var(--g4); } .chip.g4 .cd{background:var(--g4);}
+  .chip.m  { background:var(--maintb); color:var(--maint);} .chip.m .cd{background:var(--maint);}
+
+  /* region 1: goals */
+  .goal { font-family:'Caveat'; font-size:21px; display:flex; gap:11px; padding:7px 0; align-items:center; border-bottom:1px dashed var(--line); }
+  .goal:last-child { border-bottom:none; }
+  .goal .gn { width:14px; height:14px; border-radius:50%; flex:0 0 auto; }
+  .goal .gtxt { flex:1; }
+  .goal .pct { font-family:'Inter'; font-size:11px; font-weight:700; color:var(--faint); }
+
+  /* checkable rows */
+  .item { display:flex; gap:11px; align-items:flex-start; padding:10px 0; }
+  .item + .item { border-top:1px solid #f1f2f4; }
+  .ck { width:22px; height:22px; border-radius:7px; border:2px solid #cfd3d8; flex:0 0 auto; margin-top:1px; }
+  .ck.on { background:var(--g2); border-color:var(--g2); position:relative; }
+  .ck.on::after { content:'✓'; color:#fff; font-size:14px; font-weight:700; position:absolute; top:0; left:4px; }
+  .item .body { flex:1; }
+  .item .main { font-size:15.5px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .item .sub { font-size:12.5px; color:var(--faint); margin-top:3px; }
+  .item.done .maintxt { color:var(--done); position:relative; }
+  .item.done .maintxt::after { content:''; position:absolute; left:-2px; right:-2px; top:52%; height:2.5px; background:var(--accent); border-radius:2px; transform:rotate(-1deg); opacity:.8; }
+  .pdot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+  /* rolling history + suggest-next */
+  .histline { font-size:13px; color:var(--done); margin:0 0 5px 0; position:relative; display:inline-block; }
+  .histline::after { content:''; position:absolute; left:0; right:0; top:50%; height:2px; background:var(--done); }
+  .suggestnext { background:var(--accent-soft); border:1px dashed var(--accent); border-radius:11px; padding:9px 11px; margin-top:8px; }
+  .suggestnext .q { font-size:13px; color:#9a4a2b; font-weight:600; }
+  .suggestnext .q b { font-weight:800; }
+  .suggestnext .btns { display:flex; gap:8px; margin-top:8px; }
+  .suggestnext button { font:inherit; font-weight:700; font-size:12px; border:none; border-radius:8px; padding:7px 14px; }
+  .suggestnext .yes { background:var(--accent); color:#fff; }
+  .suggestnext .ed { background:#fff; color:#9a4a2b; border:1px solid #e9c4b2; }
+  .helper { font-family:'Caveat'; font-size:17px; color:var(--soft); text-align:center; padding:4px 0 2px; }
+
+  /* region 3 */
+  .suggest { background:var(--accent-soft); border:1px solid #f3d6c0; border-radius:14px; padding:13px 14px; margin-bottom:11px; }
+  .suggest .s1 { font-size:14px; font-weight:600; color:#9a4a2b; } .suggest .s1 b { font-weight:800; }
+  .suggest .btns { display:flex; gap:9px; margin-top:11px; }
+  .suggest button { font:inherit; font-weight:700; font-size:13px; border:none; border-radius:10px; padding:9px 18px; }
+  .suggest .add { background:var(--accent); color:#fff; }
+  .suggest .skip { background:#fff; color:#9a4a2b; border:1px solid #e9c4b2; }
+
+  .lockrow { display:flex; gap:11px; align-items:flex-start; padding:10px 0; border-top:1px solid #f1f2f4; }
+  .lockrow .tm,.agitem .tm { font-size:12px; font-weight:700; color:var(--soft); width:52px; flex:0 0 auto; padding-top:2px; }
+  .lockrow .lk { flex:1; background:var(--work-bg); border-left:3px solid var(--work); border-radius:8px; padding:7px 11px; }
+  .lockrow .lk .main { font-size:14.5px; font-weight:700; } .lockrow .lk .main::before { content:'🔒 '; }
+  .lockrow .lk .sub { font-size:12px; color:var(--soft); }
+  .agitem { display:flex; gap:11px; align-items:flex-start; padding:10px 0; border-top:1px solid #f1f2f4; }
+  .agitem .body { flex:1; }
+
+  /* knock-out window */
+  .knock { border:1.5px dashed #cdd2d7; border-radius:12px; padding:10px 12px; margin-top:2px; background:#fafbfc; }
+  .knock .kh { font-size:12.5px; font-weight:800; color:var(--soft); display:flex; justify-content:space-between; margin-bottom:5px; }
+  .knock .ki { display:flex; gap:9px; align-items:center; padding:5px 0; font-size:14px; }
+  .knock .ki .minick { width:17px; height:17px; border:2px solid #cfd3d8; border-radius:5px; flex:0 0 auto; }
+
+  /* scoreboard */
+  .scores { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .sc { background:#fff; border-radius:13px; box-shadow:var(--shadow); padding:11px 12px; }
+  .sc .l { font-size:12px; font-weight:700; color:var(--soft); display:flex; align-items:center; gap:6px; }
+  .sc .v { font-size:17px; font-weight:800; margin-top:3px; }
+  .sc .bar { height:6px; border-radius:3px; background:#eceef0; margin-top:7px; overflow:hidden; }
+  .sc .bar i { display:block; height:100%; }
+  .warn { background:var(--accent-soft); border-radius:12px; padding:10px 13px; font-size:13px; color:#9a4a2b; font-weight:600; margin-top:10px; }
+
+  .note { margin:16px 18px 26px; background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); font-size:14px; color:#43474c; }
+  .note b { color:var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">Concept ⑥ — Goal-linked board <span>· everything ties to a goal or maintenance</span></div>
+
+    <div class="head">
+      <div class="t">My Board</div>
+      <div class="cnt">✓ 12 crossed off this week</div>
+    </div>
+
+    <!-- REGION 1: GOALS (now color keys) -->
+    <div class="sec">☆ 2026 Goals</div>
+    <div class="pad"><div class="card">
+      <div class="goal"><span class="gn" style="background:var(--g1)"></span><span class="gtxt">Make manager</span><span class="pct">on track</span></div>
+      <div class="goal"><span class="gn" style="background:var(--g2)"></span><span class="gtxt">Run a half-marathon under 2:00</span><span class="pct">on track</span></div>
+      <div class="goal"><span class="gn" style="background:var(--g3)"></span><span class="gtxt">Launch the side project</span><span class="pct">behind</span></div>
+      <div class="goal"><span class="gn" style="background:var(--g4)"></span><span class="gtxt">Finally fix the bite</span><span class="pct">moving</span></div>
+    </div></div>
+
+    <!-- REGION 2: ROLLING NEXT-ACTIONS, each tagged to goal/maintenance -->
+    <div class="sec">↻ Up next — one move at a time</div>
+    <div class="pad">
+      <div class="card">
+        <!-- item that was just crossed off → app suggests next step -->
+        <div class="item">
+          <div class="ck on" style="background:var(--maint); border-color:var(--maint)"></div>
+          <div class="body">
+            <div class="main"><span class="maintxt">Buy plane tickets</span> <span class="chip m"><span class="cd"></span>Maintenance</span></div>
+            <div class="suggestnext">
+              <div class="q">Nice ✓ — next step for <b>Vacation</b>: &nbsp;“Plan the itinerary”?</div>
+              <div class="btns"><button class="yes">Yes, add</button><button class="ed">Edit</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="ck"></div>
+          <div class="body">
+            <div class="histline">Saw the orthodontist</div>
+            <div class="main"><span class="maintxt">Book oral-surgeon consult</span> <span class="chip g4"><span class="cd"></span>Fix the bite</span></div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="ck"></div>
+          <div class="body">
+            <div class="main"><span class="maintxt">Outline the landing page</span> <span class="chip g3"><span class="cd"></span>Side project</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="helper">Cross one off → I suggest the next step, you confirm ✍️</div>
+    </div>
+
+    <!-- REGION 3: THIS WEEK / CALENDAR-AWARE -->
+    <div class="sec">🗓 This week — fit around work</div>
+    <div class="pad">
+      <div class="suggest">
+        <div class="s1">Found <b>Thu 4:00–5:30</b> open after your Acme call. Add <b>deep work</b> toward <b>Make manager</b>?</div>
+        <div class="btns"><button class="add">Add it</button><button class="skip">Skip</button></div>
+      </div>
+
+      <div class="card">
+        <div class="agitem">
+          <div class="tm">6:30a</div>
+          <div class="body"><div class="main done" style="padding:0"><span class="pdot" style="background:var(--g2)"></span><span class="maintxt">Gym</span> <span class="chip g2"><span class="cd"></span>Half-marathon</span></div></div>
+          <div class="ck on"></div>
+        </div>
+        <div class="lockrow">
+          <div class="tm">11:00a</div>
+          <div class="lk"><div class="main">Client call — Acme</div><div class="sub">Outlook · locked</div></div>
+        </div>
+        <div class="agitem">
+          <div class="tm">3:30p</div>
+          <div class="body"><div class="main"><span class="pdot" style="background:var(--g1)"></span>Deep work: finish deck <span class="chip g1"><span class="cd"></span>Make manager</span></div><div class="sub">moved here when the 2pm call landed</div></div>
+          <div class="ck"></div>
+        </div>
+
+        <!-- knock-out window batches the tiny one-offs -->
+        <div class="agitem">
+          <div class="tm">5:30p</div>
+          <div class="body" style="padding-top:0">
+            <div class="knock">
+              <div class="kh"><span>⚡ Knock-out window · 15 min</span><span style="color:var(--faint)">3 quick wins</span></div>
+              <div class="ki"><span class="minick"></span> Book oral-surgeon consult <span class="chip g4" style="margin-left:auto"><span class="cd"></span>Bite</span></div>
+              <div class="ki"><span class="minick"></span> Cancel old subscription <span class="chip m" style="margin-left:auto"><span class="cd"></span>Maint</span></div>
+              <div class="ki"><span class="minick"></span> Reply to recruiter <span class="chip g1" style="margin-left:auto"><span class="cd"></span>Mgr</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="agitem">
+          <div class="tm">6:00p</div>
+          <div class="body"><div class="main"><span class="pdot" style="background:var(--maint)"></span>Meal prep — salmon <span class="chip m"><span class="cd"></span>Maintenance</span></div></div>
+          <div class="ck"></div>
+        </div>
+      </div>
+
+      <div class="sec" style="padding:6px 4px 9px">Toward your goals this week</div>
+      <div class="scores">
+        <div class="sc"><div class="l"><span class="pdot" style="background:var(--g1)"></span>Make manager</div><div class="v">6<span style="font-size:11px;color:var(--faint)"> / 10h deep work</span></div><div class="bar"><i style="width:60%;background:var(--g1)"></i></div></div>
+        <div class="sc"><div class="l"><span class="pdot" style="background:var(--g2)"></span>Half-marathon</div><div class="v">2<span style="font-size:11px;color:var(--faint)"> / 3 runs</span></div><div class="bar"><i style="width:66%;background:var(--g2)"></i></div></div>
+        <div class="sc"><div class="l"><span class="pdot" style="background:var(--g4)"></span>Fix the bite</div><div class="v">1<span style="font-size:11px;color:var(--faint)"> step moving</span></div><div class="bar"><i style="width:50%;background:var(--g4)"></i></div></div>
+        <div class="sc"><div class="l"><span class="pdot" style="background:var(--maint)"></span>Life maintenance</div><div class="v">5<span style="font-size:11px;color:var(--faint)"> done</span></div><div class="bar"><i style="width:80%;background:var(--maint)"></i></div></div>
+      </div>
+
+      <div class="warn">⚠️ <b>Side project</b> got 0 of 2 hrs — no open slots left this week. Bump a gym day, or carry it to next week?</div>
+    </div>
+
+    <div class="note">
+      <b>Everything links to a goal or to maintenance</b> — the colored chips. Now the bottom scoreboard answers the real question: <i>am I actually moving my 2026 goals, or just doing life maintenance?</i> "Side project" is visibly behind because the week filled up — and the app says so instead of hiding it.<br><br>
+      Two new bits since the last mock: <b>(1)</b> crossing off a rolling item pops the orange <b>"next step?"</b> suggestion you confirm or edit (see Vacation). <b>(2)</b> tiny one-offs don't each grab a calendar block — they pool into a single <b>⚡ Knock-out window</b> so the day stays clean. Goals + a maintenance bucket are the <b>only</b> organizing layer — no separate "priorities" list to manage.
+    </div>
+  </div>
+</body>
+</html>
